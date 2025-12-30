@@ -1,0 +1,370 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --secondary: #6b7280;
+  --background: #f9fafb;
+  --surface: #ffffff;
+  --text: #111827;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --error: #ef4444;
+  --success: #22c55e;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--background);
+  color: var(--text);
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  background: var(--surface);
+  padding: 1.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.header h1 {
+  font-size: 2rem;
+  color: var(--primary);
+  margin-bottom: 0.25rem;
+}
+
+.header p {
+  color: var(--text-secondary);
+}
+
+/* Progress Steps */
+.progress {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background: var(--background);
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.step.active {
+  background: var(--primary);
+  color: white;
+}
+
+.step.done {
+  background: var(--success);
+  color: white;
+}
+
+.step-number {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.step-label {
+  font-size: 0.875rem;
+}
+
+/* Main Content */
+.main {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Upload Zone */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 1rem;
+  padding: 4rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+}
+
+.upload-zone:hover {
+  border-color: var(--primary);
+  background: #f3f4f6;
+}
+
+.upload-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.upload-zone p {
+  color: var(--text);
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+}
+
+.upload-hint {
+  color: var(--text-secondary);
+  font-size: 0.875rem !important;
+}
+
+/* Preview */
+.preview {
+  position: relative;
+  background: var(--surface);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.preview img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.text-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.overlay-text {
+  position: absolute;
+  white-space: nowrap;
+  font-family: 'Noto Sans TC', sans-serif;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Sections */
+.ocr-section,
+.translate-section,
+.edit-section,
+.generate-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .translate-section,
+  .edit-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+
+  .translate-section .actions,
+  .edit-section .actions {
+    grid-column: span 2;
+  }
+}
+
+/* OCR Results & Editor */
+.ocr-results,
+.editor {
+  background: var(--surface);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ocr-results h3,
+.editor h3 {
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.text-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.text-item {
+  padding: 0.75rem;
+  background: var(--background);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.edit-item {
+  padding: 1rem;
+  background: var(--background);
+  border-radius: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.edit-item .original {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.edit-item input[type="text"] {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.edit-item input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.edit-item .controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.edit-item input[type="number"] {
+  width: 60px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+}
+
+.edit-item input[type="color"] {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+/* Buttons */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn.secondary:hover {
+  background: var(--background);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Error */
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: var(--error);
+  padding: 1rem;
+  margin: 0 2rem;
+  border-radius: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.error button {
+  background: none;
+  border: none;
+  color: var(--error);
+  cursor: pointer;
+  font-size: 1.25rem;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  z-index: 1000;
+}
+
+.loading-overlay p {
+  color: white;
+  font-size: 1.125rem;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
