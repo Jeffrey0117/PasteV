@@ -496,11 +496,12 @@ body {
   border-radius: var(--radius);
   overflow: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   padding: 1.5rem;
   box-shadow: var(--shadow-sm);
   min-height: calc(100vh - 300px);
+  max-height: calc(100vh - 200px);
 }
 
 .design-canvas {
@@ -508,6 +509,8 @@ body {
   box-shadow: var(--shadow-lg);
   font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
   border-radius: 4px;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
 .text-block {

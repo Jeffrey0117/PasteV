@@ -173,7 +173,15 @@ function App() {
       if (saved) {
         const data = JSON.parse(saved);
         if (data.images?.length > 0) {
-          setImages(data.images);
+          // 補上可能缺少的新屬性
+          const migratedImages = data.images.map((img: ImageItem) => ({
+            ...img,
+            textBlocks: img.textBlocks.map(block => ({
+              ...defaultBlockStyle,
+              ...block,
+            }))
+          }));
+          setImages(migratedImages);
           setCurrentImageIndex(data.currentImageIndex || 0);
           setStep(data.step || 'upload');
           if (data.canvasSettings) setCanvasSettings(data.canvasSettings);

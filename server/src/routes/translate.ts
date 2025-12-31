@@ -83,6 +83,7 @@ router.post('/', async (req, res) => {
     // 提取翻譯結果
     let currentIndex = 0;
     for (const part of parts) {
+      if (!part) continue; // 跳過 undefined/null
       const trimmed = part.trim();
       if (trimmed && !/^\d+$/.test(trimmed)) {
         // 移除開頭的 [數字] 標記
