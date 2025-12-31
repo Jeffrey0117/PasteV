@@ -8,7 +8,10 @@ interface TranslateRequest {
   targetLang?: string;
 }
 
-// Translate endpoint using DeepSeek API
+// 分隔符用於批量翻譯
+const BATCH_SEPARATOR = '\n===SPLIT===\n';
+
+// Translate endpoint using DeepSeek API (optimized for batch)
 router.post('/', async (req, res) => {
   try {
     const { texts, sourceLang = 'en', targetLang = 'zh' }: TranslateRequest = req.body;
@@ -29,49 +32,90 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Translate each text separately for better accuracy
-    const translations: string[] = [];
+    console.log(`Batch translating ${texts.length} texts...`);
+    const startTime = Date.now();
 
-    for (const text of texts) {
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: '你是專業翻譯。請將以下英文翻譯成繁體中文。只輸出翻譯結果，不要加任何解釋或標點符號變化。保持原文的段落格式。'
-            },
-            {
-              role: 'user',
-              content: text
-            }
-          ],
-          temperature: 0.3
-        })
-      });
+    // 合併所有文字為單次 API 呼叫 (大幅加速)
+    const combinedText = texts.map((t, i) => `[${i + 1}]\n${t}`).join(BATCH_SEPARATOR);
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('DeepSeek API Error:', errorData);
-        translations.push(text); // fallback to original
-        continue;
-      }
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: `你是專業翻譯。請將以下英文內容翻譯成繁體中文。
+規則：
+1. 每段文字以 [數字] 開頭標記
+2. 請保持相同的標記格式 [數字] 輸出翻譯結果
+3. 段落之間用 ===SPLIT=== 分隔
+4. 只輸出翻譯結果，不要加任何解釋
+5. 保持原文的段落格式`
+          },
+          {
+            role: 'user',
+            content: combinedText
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 4096
+      })
+    });
 
-      const data = await response.json();
-      const translated = data.choices[0]?.message?.content?.trim() || text;
-      translations.push(translated);
-
-      console.log('Translated:', text.substring(0, 50) + '...', '=>', translated.substring(0, 50) + '...');
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('DeepSeek API Error:', errorData);
+      return res.status(500).json({ error: 'Translation API failed', details: errorData });
     }
+
+    const data = await response.json();
+    const translatedContent = data.choices[0]?.message?.content?.trim() || '';
+
+    // 解析批量翻譯結果
+    const translations: string[] = [];
+    const parts = translatedContent.split(/===SPLIT===|\n\[(\d+)\]/);
+
+    // 提取翻譯結果
+    let currentIndex = 0;
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (trimmed && !/^\d+$/.test(trimmed)) {
+        // 移除開頭的 [數字] 標記
+        const cleaned = trimmed.replace(/^\[\d+\]\s*/, '').trim();
+        if (cleaned) {
+          translations.push(cleaned);
+          currentIndex++;
+        }
+      }
+    }
+
+    // 如果解析失敗，嘗試簡單分割
+    if (translations.length !== texts.length) {
+      console.log('Fallback parsing...');
+      translations.length = 0;
+      const simpleParts = translatedContent.split('===SPLIT===');
+      for (let i = 0; i < texts.length; i++) {
+        if (simpleParts[i]) {
+          const cleaned = simpleParts[i].replace(/^\[\d+\]\s*/, '').trim();
+          translations.push(cleaned || texts[i]);
+        } else {
+          translations.push(texts[i]);
+        }
+      }
+    }
+
+    const elapsed = Date.now() - startTime;
+    console.log(`Batch translation completed in ${elapsed}ms (${texts.length} texts)`);
 
     res.json({
       success: true,
-      translations
+      translations,
+      timing: elapsed
     });
 
   } catch (error) {

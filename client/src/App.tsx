@@ -439,40 +439,56 @@ function App() {
     }
   };
 
-  // 批次翻譯
+  // 批次翻譯 (優化: 一次性發送所有文字)
   const runBatchTranslate = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      for (let i = 0; i < images.length; i++) {
-        if (!images[i].ocrText) continue;
+      // 收集所有需要翻譯的文字和對應索引
+      const textsToTranslate: { index: number; text: string }[] = [];
+      images.forEach((img, idx) => {
+        if (img.ocrText) {
+          textsToTranslate.push({ index: idx, text: img.ocrText });
+        }
+      });
 
-        setProcessingStatus(`翻譯中... (${i + 1}/${images.length})`);
-
-        const response = await fetch(`${API_BASE}/translate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            texts: [images[i].ocrText],
-            sourceLang: 'en',
-            targetLang: 'zh'
-          })
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Translation failed');
-
-        setImages(prev => prev.map((img, idx) =>
-          idx === i ? {
-            ...img,
-            translatedText: data.translations[0] || img.ocrText,
-            status: 'translated'
-          } : img
-        ));
+      if (textsToTranslate.length === 0) {
+        setProcessingStatus('沒有需要翻譯的文字');
+        return;
       }
 
-      setProcessingStatus('翻譯完成！');
+      setProcessingStatus(`翻譯中... (${textsToTranslate.length} 段文字)`);
+
+      // 一次性發送所有文字
+      const response = await fetch(`${API_BASE}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texts: textsToTranslate.map(t => t.text),
+          sourceLang: 'en',
+          targetLang: 'zh'
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Translation failed');
+
+      // 一次性更新所有翻譯結果
+      setImages(prev => {
+        const updated = [...prev];
+        textsToTranslate.forEach((item, i) => {
+          updated[item.index] = {
+            ...updated[item.index],
+            translatedText: data.translations[i] || updated[item.index].ocrText,
+            status: 'translated'
+          };
+        });
+        return updated;
+      });
+
+      const timing = data.timing ? ` (${data.timing}ms)` : '';
+      setProcessingStatus(`翻譯完成！${timing}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Translation failed');
     } finally {
