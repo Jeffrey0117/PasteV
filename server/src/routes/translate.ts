@@ -20,7 +20,6 @@ router.post('/', async (req, res) => {
     const apiKey = process.env.DEEPSEEK_API_KEY;
 
     if (!apiKey) {
-      // Return mock translation if no API key (for development)
       console.warn('No DEEPSEEK_API_KEY set, returning mock translation');
       const mockTranslations = texts.map(t => `[翻譯] ${t}`);
       return res.json({
@@ -30,47 +29,45 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Call DeepSeek API
-    const prompt = `Translate the following texts from ${sourceLang} to ${targetLang}. Return only the translations, one per line, in the same order:
+    // Translate each text separately for better accuracy
+    const translations: string[] = [];
 
-${texts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
+    for (const text of texts) {
+      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            {
+              role: 'system',
+              content: '你是專業翻譯。請將以下英文翻譯成繁體中文。只輸出翻譯結果，不要加任何解釋或標點符號變化。保持原文的段落格式。'
+            },
+            {
+              role: 'user',
+              content: text
+            }
+          ],
+          temperature: 0.3
+        })
+      });
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional translator. Translate accurately and naturally. Only output the translations, nothing else.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3
-      })
-    });
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('DeepSeek API Error:', errorData);
+        translations.push(text); // fallback to original
+        continue;
+      }
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('DeepSeek API Error:', errorData);
-      return res.status(500).json({ error: 'Translation API failed', details: errorData });
+      const data = await response.json();
+      const translated = data.choices[0]?.message?.content?.trim() || text;
+      translations.push(translated);
+
+      console.log('Translated:', text.substring(0, 50) + '...', '=>', translated.substring(0, 50) + '...');
     }
-
-    const data = await response.json();
-    const translatedText = data.choices[0]?.message?.content || '';
-
-    // Parse translations (split by newline, remove numbering)
-    const translations = translatedText
-      .split('\n')
-      .map((line: string) => line.replace(/^\d+\.\s*/, '').trim())
-      .filter((line: string) => line.length > 0);
 
     res.json({
       success: true,

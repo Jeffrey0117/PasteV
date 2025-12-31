@@ -4,6 +4,7 @@ import Tesseract from 'tesseract.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import sharp from 'sharp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +48,45 @@ interface TextBlock {
   width: number;
   height: number;
   confidence: number;
+  color: string; // hex color e.g. "#FF0000"
+}
+
+// Fast color extraction using Sharp raw pixel access
+async function extractTextColors(
+  imageBuffer: Buffer,
+  blocks: Array<{ x: number; y: number; width: number; height: number }>
+): Promise<string[]> {
+  const image = sharp(imageBuffer);
+  const metadata = await image.metadata();
+  const { width: imgWidth = 0, height: imgHeight = 0 } = metadata;
+
+  // Get raw RGB pixel data (no alpha for speed)
+  const { data, info } = await image
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const colors: string[] = [];
+  const channels = info.channels; // Should be 3 (RGB)
+
+  for (const block of blocks) {
+    // Sample center point of text block for speed
+    const centerX = Math.min(Math.max(Math.floor(block.x + block.width / 2), 0), imgWidth - 1);
+    const centerY = Math.min(Math.max(Math.floor(block.y + block.height / 2), 0), imgHeight - 1);
+
+    // Calculate pixel position in buffer
+    const pixelIndex = (centerY * info.width + centerX) * channels;
+
+    const r = data[pixelIndex] || 0;
+    const g = data[pixelIndex + 1] || 0;
+    const b = data[pixelIndex + 2] || 0;
+
+    // Convert to hex
+    const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+    colors.push(hex);
+  }
+
+  return colors;
 }
 
 // OCR endpoint
@@ -59,8 +99,11 @@ router.post('/', upload.single('image'), async (req, res) => {
     const imagePath = req.file.path;
     console.log(`Processing OCR for: ${imagePath}`);
 
+    // Read file into buffer for both OCR and color extraction
+    const imageBuffer = fs.readFileSync(imagePath);
+
     // Perform OCR with Tesseract.js
-    const result = await Tesseract.recognize(imagePath, 'eng+chi_tra', {
+    const result = await Tesseract.recognize(imageBuffer, 'eng+chi_tra', {
       logger: (m) => {
         if (m.status === 'recognizing text') {
           console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
@@ -68,12 +111,12 @@ router.post('/', upload.single('image'), async (req, res) => {
       }
     });
 
-    // Extract text blocks with positions
-    const textBlocks: TextBlock[] = [];
+    // Extract text blocks with positions (without colors first)
+    const rawBlocks: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }> = [];
 
     if (result.data.words) {
       for (const word of result.data.words) {
-        textBlocks.push({
+        rawBlocks.push({
           text: word.text,
           x: word.bbox.x0,
           y: word.bbox.y0,
@@ -84,6 +127,17 @@ router.post('/', upload.single('image'), async (req, res) => {
       }
     }
 
+    // Extract colors for all blocks in one pass (fast)
+    const colors = rawBlocks.length > 0
+      ? await extractTextColors(imageBuffer, rawBlocks)
+      : [];
+
+    // Merge colors into text blocks
+    const textBlocks: TextBlock[] = rawBlocks.map((block, i) => ({
+      ...block,
+      color: colors[i] || '#000000'
+    }));
+
     // Clean up uploaded file
     fs.unlinkSync(imagePath);
 
@@ -91,8 +145,8 @@ router.post('/', upload.single('image'), async (req, res) => {
       success: true,
       fullText: result.data.text,
       textBlocks,
-      imageWidth: result.data.width || 0,
-      imageHeight: result.data.height || 0
+      imageWidth: (result.data as any).width || 0,
+      imageHeight: (result.data as any).height || 0
     });
 
   } catch (error) {
@@ -122,11 +176,12 @@ router.post('/base64', async (req, res) => {
       }
     });
 
-    const textBlocks: TextBlock[] = [];
+    // Extract text blocks with positions (without colors first)
+    const rawBlocks: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }> = [];
 
     if (result.data.words) {
       for (const word of result.data.words) {
-        textBlocks.push({
+        rawBlocks.push({
           text: word.text,
           x: word.bbox.x0,
           y: word.bbox.y0,
@@ -137,12 +192,23 @@ router.post('/base64', async (req, res) => {
       }
     }
 
+    // Extract colors for all blocks in one pass (fast)
+    const colors = rawBlocks.length > 0
+      ? await extractTextColors(buffer, rawBlocks)
+      : [];
+
+    // Merge colors into text blocks
+    const textBlocks: TextBlock[] = rawBlocks.map((block, i) => ({
+      ...block,
+      color: colors[i] || '#000000'
+    }));
+
     res.json({
       success: true,
       fullText: result.data.text,
       textBlocks,
-      imageWidth: result.data.width || 0,
-      imageHeight: result.data.height || 0
+      imageWidth: (result.data as any).width || 0,
+      imageHeight: (result.data as any).height || 0
     });
 
   } catch (error) {

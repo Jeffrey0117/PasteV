@@ -1,31 +1,102 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import './App.css';
 
 const API_BASE = 'http://localhost:3001/api';
 
-// 文字區塊
+// 可用字體列表
+const FONT_OPTIONS = [
+  { value: 'system-ui, sans-serif', label: '系統預設' },
+  { value: '"Microsoft JhengHei", sans-serif', label: '微軟正黑體' },
+  { value: '"Noto Sans TC", sans-serif', label: '思源黑體' },
+  { value: '"Arial", sans-serif', label: 'Arial' },
+  { value: '"Times New Roman", serif', label: 'Times New Roman' },
+  { value: '"Courier New", monospace', label: 'Courier New' },
+  { value: '"Georgia", serif', label: 'Georgia' },
+];
+
+// 文字區塊 (增強版)
 interface TextBlock {
   id: string;
   originalText: string;
   translatedText: string;
   x: number;
   y: number;
+  // 基本樣式
   fontSize: number;
   fontWeight: string;
+  fontFamily: string;
   color: string;
   textAlign: 'left' | 'center' | 'right';
+  // 進階樣式
+  opacity: number;
+  lineHeight: number;
+  letterSpacing: number;
+  // 文字效果
+  textShadow: string;
+  textStroke: string;
+  textStrokeColor: string;
+  // 排版
+  rotation: number;
+  maxWidth: number;
+  // 區塊樣式
+  backgroundColor: string;
+  backgroundOpacity: number;
+  borderRadius: number;
+  padding: number;
+  zIndex: number;
 }
 
-// 模板區塊配置
+// 模板區塊配置 (增強版)
 interface TemplateBlock {
   id: string;
   x: number;
   y: number;
   fontSize: number;
   fontWeight: string;
+  fontFamily: string;
   color: string;
   textAlign: 'left' | 'center' | 'right';
+  opacity: number;
+  lineHeight: number;
+  letterSpacing: number;
+  textShadow: string;
+  textStroke: string;
+  textStrokeColor: string;
+  rotation: number;
+  maxWidth: number;
+  backgroundColor: string;
+  backgroundOpacity: number;
+  borderRadius: number;
+  padding: number;
+  zIndex: number;
+}
+
+// 預設文字區塊樣式
+const defaultBlockStyle: Omit<TextBlock, 'id' | 'originalText' | 'translatedText' | 'x' | 'y'> = {
+  fontSize: 24,
+  fontWeight: 'normal',
+  fontFamily: 'system-ui, sans-serif',
+  color: '#ffffff',
+  textAlign: 'left',
+  opacity: 1,
+  lineHeight: 1.4,
+  letterSpacing: 0,
+  textShadow: 'none',
+  textStroke: '0',
+  textStrokeColor: '#000000',
+  rotation: 0,
+  maxWidth: 0,
+  backgroundColor: 'transparent',
+  backgroundOpacity: 0,
+  borderRadius: 0,
+  padding: 0,
+  zIndex: 1,
+};
+
+// 歷史記錄類型
+interface HistoryState {
+  textBlocks: TextBlock[];
 }
 
 // 單張圖片項目
@@ -78,11 +149,212 @@ function App() {
   // 圖片拖曳排序狀態
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
 
+  // 歷史記錄 (Undo/Redo)
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const isUndoRedoAction = useRef(false);
+
+  // 對齊輔助線
+  const [alignmentGuides, setAlignmentGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
+
+  // 剪貼簿 (複製區塊)
+  const [clipboard, setClipboard] = useState<TextBlock | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
+  // localStorage 自動存檔 key
+  const STORAGE_KEY = 'pastev_session';
+
+  // 從 localStorage 恢復狀態
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.images?.length > 0) {
+          setImages(data.images);
+          setCurrentImageIndex(data.currentImageIndex || 0);
+          setStep(data.step || 'upload');
+          if (data.canvasSettings) setCanvasSettings(data.canvasSettings);
+          console.log('已從 localStorage 恢復進度');
+        }
+      }
+    } catch (e) {
+      console.error('恢復進度失敗:', e);
+    }
+  }, []);
+
+  // 自動存檔到 localStorage
+  useEffect(() => {
+    if (images.length > 0) {
+      try {
+        const data = {
+          images,
+          currentImageIndex,
+          step,
+          canvasSettings,
+          savedAt: Date.now()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (e) {
+        console.error('存檔失敗:', e);
+      }
+    }
+  }, [images, currentImageIndex, step, canvasSettings]);
+
   // 當前圖片
   const currentImage = images[currentImageIndex];
+
+  // 儲存歷史記錄
+  const saveHistory = useCallback((textBlocks: TextBlock[]) => {
+    if (isUndoRedoAction.current) {
+      isUndoRedoAction.current = false;
+      return;
+    }
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push({ textBlocks: JSON.parse(JSON.stringify(textBlocks)) });
+      // 限制歷史記錄數量
+      if (newHistory.length > 50) newHistory.shift();
+      return newHistory;
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, 49));
+  }, [historyIndex]);
+
+  // Undo
+  const undo = useCallback(() => {
+    if (historyIndex <= 0) return;
+    isUndoRedoAction.current = true;
+    const prevState = history[historyIndex - 1];
+    setImages(prev => prev.map((img, idx) =>
+      idx === currentImageIndex ? { ...img, textBlocks: prevState.textBlocks } : img
+    ));
+    setHistoryIndex(prev => prev - 1);
+  }, [historyIndex, history, currentImageIndex]);
+
+  // Redo
+  const redo = useCallback(() => {
+    if (historyIndex >= history.length - 1) return;
+    isUndoRedoAction.current = true;
+    const nextState = history[historyIndex + 1];
+    setImages(prev => prev.map((img, idx) =>
+      idx === currentImageIndex ? { ...img, textBlocks: nextState.textBlocks } : img
+    ));
+    setHistoryIndex(prev => prev + 1);
+  }, [historyIndex, history, currentImageIndex]);
+
+  // 複製區塊
+  const copyBlock = useCallback(() => {
+    if (!selectedBlockId || !currentImage) return;
+    const block = currentImage.textBlocks.find(b => b.id === selectedBlockId);
+    if (block) setClipboard({ ...block });
+  }, [selectedBlockId, currentImage]);
+
+  // 貼上區塊
+  const pasteBlock = useCallback(() => {
+    if (!clipboard) return;
+    const newBlock: TextBlock = {
+      ...clipboard,
+      id: `block-${Date.now()}`,
+      x: clipboard.x + 20,
+      y: clipboard.y + 20,
+    };
+    setImages(prev => prev.map((img, idx) =>
+      idx === currentImageIndex
+        ? { ...img, textBlocks: [...img.textBlocks, newBlock] }
+        : img
+    ));
+    setSelectedBlockId(newBlock.id);
+  }, [clipboard, currentImageIndex]);
+
+  // 計算對齊輔助線
+  const calculateAlignmentGuides = useCallback((movingBlock: TextBlock, allBlocks: TextBlock[]) => {
+    const threshold = 5;
+    let guideX: number | null = null;
+    let guideY: number | null = null;
+
+    const centerX = movingBlock.x;
+    const centerY = movingBlock.y;
+
+    // 畫布中心對齊
+    if (Math.abs(centerX - canvasSettings.width / 2) < threshold) {
+      guideX = canvasSettings.width / 2;
+    }
+    if (Math.abs(centerY - canvasSettings.height / 2) < threshold) {
+      guideY = canvasSettings.height / 2;
+    }
+
+    // 其他區塊對齊
+    allBlocks.forEach(block => {
+      if (block.id === movingBlock.id) return;
+      if (Math.abs(block.x - centerX) < threshold) guideX = block.x;
+      if (Math.abs(block.y - centerY) < threshold) guideY = block.y;
+    });
+
+    setAlignmentGuides({ x: guideX, y: guideY });
+    return { x: guideX, y: guideY };
+  }, [canvasSettings]);
+
+  // 鍵盤快捷鍵
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 如果正在輸入文字，不處理快捷鍵
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Undo: Ctrl+Z
+      if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      // Redo: Ctrl+Y or Ctrl+Shift+Z
+      if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        redo();
+      }
+      // Copy: Ctrl+C
+      if (e.ctrlKey && e.key === 'c') {
+        e.preventDefault();
+        copyBlock();
+      }
+      // Paste: Ctrl+V
+      if (e.ctrlKey && e.key === 'v') {
+        e.preventDefault();
+        pasteBlock();
+      }
+      // Delete: Delete or Backspace
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedBlockId) {
+        e.preventDefault();
+        deleteBlock(selectedBlockId);
+      }
+      // Arrow keys: 微調位置
+      if (selectedBlockId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const updates: Partial<TextBlock> = {};
+        if (e.key === 'ArrowUp') updates.y = -step;
+        if (e.key === 'ArrowDown') updates.y = step;
+        if (e.key === 'ArrowLeft') updates.x = -step;
+        if (e.key === 'ArrowRight') updates.x = step;
+
+        setImages(prev => prev.map((img, idx) =>
+          idx === currentImageIndex
+            ? {
+                ...img,
+                textBlocks: img.textBlocks.map(b =>
+                  b.id === selectedBlockId
+                    ? { ...b, x: b.x + (updates.x || 0), y: b.y + (updates.y || 0) }
+                    : b
+                )
+              }
+            : img
+        ));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, copyBlock, pasteBlock, selectedBlockId, currentImageIndex]);
 
   // 多圖上傳
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,10 +491,7 @@ function App() {
       translatedText: firstImage.translatedText,
       x: 50,
       y: 50,
-      fontSize: 24,
-      fontWeight: 'normal',
-      color: '#ffffff',
-      textAlign: 'left',
+      ...defaultBlockStyle,
     };
 
     setImages(prev => prev.map((img, idx) =>
@@ -238,15 +507,29 @@ function App() {
     const firstImage = images[0];
     if (!firstImage || firstImage.textBlocks.length === 0) return;
 
-    // 從第一張圖提取模板配置
+    // 從第一張圖提取完整模板配置
     const templateBlocks: TemplateBlock[] = firstImage.textBlocks.map(block => ({
       id: block.id,
       x: block.x,
       y: block.y,
       fontSize: block.fontSize,
       fontWeight: block.fontWeight,
+      fontFamily: block.fontFamily,
       color: block.color,
       textAlign: block.textAlign,
+      opacity: block.opacity,
+      lineHeight: block.lineHeight,
+      letterSpacing: block.letterSpacing,
+      textShadow: block.textShadow,
+      textStroke: block.textStroke,
+      textStrokeColor: block.textStrokeColor,
+      rotation: block.rotation,
+      maxWidth: block.maxWidth,
+      backgroundColor: block.backgroundColor,
+      backgroundOpacity: block.backgroundOpacity,
+      borderRadius: block.borderRadius,
+      padding: block.padding,
+      zIndex: block.zIndex,
     }));
     setTemplate(templateBlocks);
 
@@ -275,10 +558,7 @@ function App() {
       translatedText: '新文字',
       x: 100,
       y: 100,
-      fontSize: 20,
-      fontWeight: 'normal',
-      color: '#ffffff',
-      textAlign: 'left',
+      ...defaultBlockStyle,
     };
 
     setImages(prev => prev.map((img, idx) =>
@@ -324,20 +604,29 @@ function App() {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !selectedBlockId || !canvasRef.current) return;
+    if (!isDragging || !selectedBlockId || !canvasRef.current || !currentImage) return;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const newX = e.clientX - canvasRect.left - dragOffset.x;
-    const newY = e.clientY - canvasRect.top - dragOffset.y;
+    const newX = Math.max(0, e.clientX - canvasRect.left - dragOffset.x);
+    const newY = Math.max(0, e.clientY - canvasRect.top - dragOffset.y);
+
+    // 計算對齊輔助線
+    const movingBlock = { ...currentImage.textBlocks.find(b => b.id === selectedBlockId)!, x: newX, y: newY };
+    const guides = calculateAlignmentGuides(movingBlock, currentImage.textBlocks);
+
+    // 吸附到輔助線
+    const snappedX = guides.x !== null ? guides.x : newX;
+    const snappedY = guides.y !== null ? guides.y : newY;
 
     updateBlock(selectedBlockId, {
-      x: Math.max(0, newX),
-      y: Math.max(0, newY),
+      x: snappedX,
+      y: snappedY,
     });
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setAlignmentGuides({ x: null, y: null });
   };
 
   // 輸出單張圖片
@@ -408,6 +697,8 @@ function App() {
     setSelectedBlockId(null);
     setProcessingStatus('');
     if (fileInputRef.current) fileInputRef.current.value = '';
+    // 清除 localStorage 存檔
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   // 圖片拖曳排序
@@ -605,6 +896,14 @@ function App() {
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
               >
+                {/* 對齊輔助線 */}
+                {alignmentGuides.x !== null && (
+                  <div className="alignment-guide vertical" style={{ left: alignmentGuides.x }} />
+                )}
+                {alignmentGuides.y !== null && (
+                  <div className="alignment-guide horizontal" style={{ top: alignmentGuides.y }} />
+                )}
+
                 {currentImage.textBlocks.map(block => (
                   <div
                     key={block.id}
@@ -614,8 +913,20 @@ function App() {
                       top: block.y,
                       fontSize: block.fontSize,
                       fontWeight: block.fontWeight,
+                      fontFamily: block.fontFamily,
                       color: block.color,
                       textAlign: block.textAlign,
+                      opacity: block.opacity,
+                      lineHeight: block.lineHeight,
+                      letterSpacing: `${block.letterSpacing}px`,
+                      textShadow: block.textShadow,
+                      WebkitTextStroke: block.textStroke !== '0' ? `${block.textStroke}px ${block.textStrokeColor}` : 'none',
+                      transform: block.rotation !== 0 ? `rotate(${block.rotation}deg)` : 'none',
+                      maxWidth: block.maxWidth > 0 ? block.maxWidth : 'none',
+                      backgroundColor: block.backgroundOpacity > 0 ? block.backgroundColor : 'transparent',
+                      borderRadius: block.borderRadius,
+                      padding: block.padding,
+                      zIndex: block.zIndex,
                     }}
                     onMouseDown={(e) => handleMouseDown(e, block.id)}
                   >
@@ -627,6 +938,13 @@ function App() {
 
             <div className="controls-panel">
               <h3>模板設定</h3>
+
+              {/* 快捷鍵提示 */}
+              <div className="shortcuts-hint">
+                <small>
+                  Ctrl+Z 撤銷 | Ctrl+Y 重做 | Ctrl+C/V 複製貼上 | 方向鍵微調
+                </small>
+              </div>
 
               <div className="control-group">
                 <label>畫布設定</label>
@@ -660,74 +978,260 @@ function App() {
               </button>
 
               {selectedBlock && (
-                <div className="control-group">
-                  <label>文字內容</label>
-                  <textarea
-                    value={selectedBlock.translatedText}
-                    onChange={(e) => updateBlock(selectedBlock.id, { translatedText: e.target.value })}
-                    rows={3}
-                  />
-
-                  <div className="input-row">
-                    <label>字體大小</label>
-                    <input
-                      type="number"
-                      value={selectedBlock.fontSize}
-                      onChange={(e) => updateBlock(selectedBlock.id, { fontSize: parseInt(e.target.value) || 16 })}
-                      min="8"
-                      max="200"
+                <div className="control-group enhanced-controls">
+                  {/* 基本設定 */}
+                  <div className="control-section">
+                    <h4>文字內容</h4>
+                    <textarea
+                      value={selectedBlock.translatedText}
+                      onChange={(e) => updateBlock(selectedBlock.id, { translatedText: e.target.value })}
+                      rows={3}
                     />
                   </div>
 
-                  <div className="input-row">
-                    <label>粗細</label>
-                    <select
-                      value={selectedBlock.fontWeight}
-                      onChange={(e) => updateBlock(selectedBlock.id, { fontWeight: e.target.value })}
+                  {/* 字體設定 */}
+                  <div className="control-section">
+                    <h4>字體設定</h4>
+                    <div className="input-row">
+                      <label>字體</label>
+                      <select
+                        value={selectedBlock.fontFamily}
+                        onChange={(e) => updateBlock(selectedBlock.id, { fontFamily: e.target.value })}
+                      >
+                        {FONT_OPTIONS.map(font => (
+                          <option key={font.value} value={font.value}>{font.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="input-row">
+                      <label>大小</label>
+                      <input
+                        type="number"
+                        value={selectedBlock.fontSize}
+                        onChange={(e) => updateBlock(selectedBlock.id, { fontSize: parseInt(e.target.value) || 16 })}
+                        min="8"
+                        max="200"
+                      />
+                    </div>
+                    <div className="input-row">
+                      <label>粗細</label>
+                      <select
+                        value={selectedBlock.fontWeight}
+                        onChange={(e) => updateBlock(selectedBlock.id, { fontWeight: e.target.value })}
+                      >
+                        <option value="normal">正常</option>
+                        <option value="bold">粗體</option>
+                        <option value="100">100</option>
+                        <option value="300">300</option>
+                        <option value="500">500</option>
+                        <option value="700">700</option>
+                        <option value="900">900</option>
+                      </select>
+                    </div>
+                    <div className="input-row">
+                      <label>顏色</label>
+                      <input
+                        type="color"
+                        value={selectedBlock.color}
+                        onChange={(e) => updateBlock(selectedBlock.id, { color: e.target.value })}
+                      />
+                    </div>
+                    <div className="input-row">
+                      <label>對齊</label>
+                      <select
+                        value={selectedBlock.textAlign}
+                        onChange={(e) => updateBlock(selectedBlock.id, { textAlign: e.target.value as 'left' | 'center' | 'right' })}
+                      >
+                        <option value="left">靠左</option>
+                        <option value="center">置中</option>
+                        <option value="right">靠右</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 進階樣式 */}
+                  <div className="control-section">
+                    <h4>進階樣式</h4>
+                    <div className="input-row">
+                      <label>透明度</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={selectedBlock.opacity}
+                        onChange={(e) => updateBlock(selectedBlock.id, { opacity: parseFloat(e.target.value) })}
+                      />
+                      <span>{Math.round(selectedBlock.opacity * 100)}%</span>
+                    </div>
+                    <div className="input-row">
+                      <label>行高</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        max="3"
+                        value={selectedBlock.lineHeight}
+                        onChange={(e) => updateBlock(selectedBlock.id, { lineHeight: parseFloat(e.target.value) || 1.4 })}
+                      />
+                    </div>
+                    <div className="input-row">
+                      <label>字距</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="-5"
+                        max="20"
+                        value={selectedBlock.letterSpacing}
+                        onChange={(e) => updateBlock(selectedBlock.id, { letterSpacing: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 文字效果 */}
+                  <div className="control-section">
+                    <h4>文字效果</h4>
+                    <div className="input-row">
+                      <label>陰影</label>
+                      <select
+                        value={selectedBlock.textShadow}
+                        onChange={(e) => updateBlock(selectedBlock.id, { textShadow: e.target.value })}
+                      >
+                        <option value="none">無</option>
+                        <option value="1px 1px 2px rgba(0,0,0,0.5)">淺陰影</option>
+                        <option value="2px 2px 4px rgba(0,0,0,0.7)">中陰影</option>
+                        <option value="3px 3px 6px rgba(0,0,0,0.9)">深陰影</option>
+                        <option value="0 0 10px rgba(255,255,255,0.8)">發光</option>
+                      </select>
+                    </div>
+                    <div className="input-row">
+                      <label>描邊</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="5"
+                        step="0.5"
+                        value={selectedBlock.textStroke}
+                        onChange={(e) => updateBlock(selectedBlock.id, { textStroke: e.target.value })}
+                      />
+                      <input
+                        type="color"
+                        value={selectedBlock.textStrokeColor}
+                        onChange={(e) => updateBlock(selectedBlock.id, { textStrokeColor: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 排版 */}
+                  <div className="control-section">
+                    <h4>排版</h4>
+                    <div className="input-row">
+                      <label>旋轉</label>
+                      <input
+                        type="range"
+                        min="-180"
+                        max="180"
+                        value={selectedBlock.rotation}
+                        onChange={(e) => updateBlock(selectedBlock.id, { rotation: parseInt(e.target.value) })}
+                      />
+                      <span>{selectedBlock.rotation}°</span>
+                    </div>
+                    <div className="input-row">
+                      <label>最大寬度</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="2000"
+                        value={selectedBlock.maxWidth}
+                        onChange={(e) => updateBlock(selectedBlock.id, { maxWidth: parseInt(e.target.value) || 0 })}
+                      />
+                      <small>(0=無限)</small>
+                    </div>
+                    <div className="input-row">
+                      <label>位置 X</label>
+                      <input
+                        type="number"
+                        value={Math.round(selectedBlock.x)}
+                        onChange={(e) => updateBlock(selectedBlock.id, { x: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="input-row">
+                      <label>位置 Y</label>
+                      <input
+                        type="number"
+                        value={Math.round(selectedBlock.y)}
+                        onChange={(e) => updateBlock(selectedBlock.id, { y: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 區塊樣式 */}
+                  <div className="control-section">
+                    <h4>區塊樣式</h4>
+                    <div className="input-row">
+                      <label>背景色</label>
+                      <input
+                        type="color"
+                        value={selectedBlock.backgroundColor === 'transparent' ? '#000000' : selectedBlock.backgroundColor}
+                        onChange={(e) => updateBlock(selectedBlock.id, { backgroundColor: e.target.value })}
+                      />
+                    </div>
+                    <div className="input-row">
+                      <label>背景透明度</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={selectedBlock.backgroundOpacity}
+                        onChange={(e) => updateBlock(selectedBlock.id, { backgroundOpacity: parseFloat(e.target.value) })}
+                      />
+                      <span>{Math.round(selectedBlock.backgroundOpacity * 100)}%</span>
+                    </div>
+                    <div className="input-row">
+                      <label>圓角</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={selectedBlock.borderRadius}
+                        onChange={(e) => updateBlock(selectedBlock.id, { borderRadius: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="input-row">
+                      <label>內距</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={selectedBlock.padding}
+                        onChange={(e) => updateBlock(selectedBlock.id, { padding: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="input-row">
+                      <label>圖層</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={selectedBlock.zIndex}
+                        onChange={(e) => updateBlock(selectedBlock.id, { zIndex: parseInt(e.target.value) || 1 })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 操作按鈕 */}
+                  <div className="control-section">
+                    <button onClick={copyBlock} className="btn secondary full-width">
+                      複製區塊 (Ctrl+C)
+                    </button>
+                    <button
+                      onClick={() => deleteBlock(selectedBlock.id)}
+                      className="btn danger full-width"
                     >
-                      <option value="normal">正常</option>
-                      <option value="bold">粗體</option>
-                      <option value="100">100</option>
-                      <option value="300">300</option>
-                      <option value="500">500</option>
-                      <option value="700">700</option>
-                      <option value="900">900</option>
-                    </select>
+                      刪除此區塊
+                    </button>
                   </div>
-
-                  <div className="input-row">
-                    <label>顏色</label>
-                    <input
-                      type="color"
-                      value={selectedBlock.color}
-                      onChange={(e) => updateBlock(selectedBlock.id, { color: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="input-row">
-                    <label>位置 X</label>
-                    <input
-                      type="number"
-                      value={selectedBlock.x}
-                      onChange={(e) => updateBlock(selectedBlock.id, { x: parseInt(e.target.value) || 0 })}
-                    />
-                  </div>
-
-                  <div className="input-row">
-                    <label>位置 Y</label>
-                    <input
-                      type="number"
-                      value={selectedBlock.y}
-                      onChange={(e) => updateBlock(selectedBlock.id, { y: parseInt(e.target.value) || 0 })}
-                    />
-                  </div>
-
-                  <button
-                    onClick={() => deleteBlock(selectedBlock.id)}
-                    className="btn danger full-width"
-                  >
-                    刪除此區塊
-                  </button>
                 </div>
               )}
 
@@ -807,8 +1311,20 @@ function App() {
                         top: block.y,
                         fontSize: block.fontSize,
                         fontWeight: block.fontWeight,
+                        fontFamily: block.fontFamily,
                         color: block.color,
                         textAlign: block.textAlign,
+                        opacity: block.opacity,
+                        lineHeight: block.lineHeight,
+                        letterSpacing: `${block.letterSpacing}px`,
+                        textShadow: block.textShadow,
+                        WebkitTextStroke: block.textStroke !== '0' ? `${block.textStroke}px ${block.textStrokeColor}` : 'none',
+                        transform: block.rotation !== 0 ? `rotate(${block.rotation}deg)` : 'none',
+                        maxWidth: block.maxWidth > 0 ? block.maxWidth : 'none',
+                        backgroundColor: block.backgroundOpacity > 0 ? block.backgroundColor : 'transparent',
+                        borderRadius: block.borderRadius,
+                        padding: block.padding,
+                        zIndex: block.zIndex,
                       }}
                       onMouseDown={(e) => handleMouseDown(e, block.id)}
                     >
@@ -822,8 +1338,8 @@ function App() {
                 <h3>圖 {currentImageIndex + 1} 文字編輯</h3>
 
                 {currentImage.textBlocks.map((block, idx) => (
-                  <div key={block.id} className="control-group">
-                    <label>區塊 {idx + 1}</label>
+                  <div key={block.id} className="control-group" onClick={() => setSelectedBlockId(block.id)}>
+                    <label style={{ cursor: 'pointer' }}>區塊 {idx + 1} {selectedBlockId === block.id ? '✓' : ''}</label>
                     <textarea
                       value={block.translatedText}
                       onChange={(e) => updateBlock(block.id, { translatedText: e.target.value })}
