@@ -535,6 +535,128 @@ body {
   box-shadow: 0 0 0 3px var(--primary-light);
 }
 
+/* 縮放把手 */
+.resize-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--primary);
+  border: 2px solid white;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  z-index: 10;
+}
+
+.resize-handle:hover {
+  transform: scale(1.2);
+}
+
+/* 快速工具列容器 */
+.quick-toolbar-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem;
+  z-index: 100;
+}
+
+/* 快速工具列 */
+.quick-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+}
+
+.quick-toolbar button {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  transition: all 0.15s;
+}
+
+.quick-toolbar button:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.quick-toolbar button.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.quick-toolbar button.delete-btn {
+  color: var(--error);
+  font-size: 16px;
+}
+
+.quick-toolbar button.delete-btn:hover {
+  background: var(--error-light);
+  border-color: var(--error);
+}
+
+.font-size-display {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 24px;
+  text-align: center;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* 顏色預設選擇 */
+.color-presets {
+  display: flex;
+  gap: 3px;
+}
+
+.color-preset {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  border-radius: 50% !important;
+  border: 2px solid transparent !important;
+  padding: 0 !important;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.color-preset:hover {
+  transform: scale(1.15);
+  border-color: var(--text) !important;
+}
+
+.color-preset.active {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
 /* Controls Panel */
 .controls-panel {
   background: var(--surface);

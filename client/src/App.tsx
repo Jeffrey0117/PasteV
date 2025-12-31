@@ -15,6 +15,13 @@ const FONT_OPTIONS = [
   { value: '"Georgia", serif', label: 'Georgia' },
 ];
 
+// 預設顏色選擇
+const PRESET_COLORS = [
+  '#ffffff', '#000000', '#ff0000', '#00ff00', '#0000ff',
+  '#ffff00', '#ff00ff', '#00ffff', '#ff6b6b', '#4ecdc4',
+  '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9', '#a29bfe',
+];
+
 // 文字區塊 (增強版)
 interface TextBlock {
   id: string;
@@ -145,6 +152,13 @@ function App() {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // 縮放狀態
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, fontSize: 24 });
+
+  // 顯示快速工具列
+  const [showQuickToolbar, setShowQuickToolbar] = useState(false);
 
   // 圖片拖曳排序狀態
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
@@ -618,6 +632,7 @@ function App() {
     if (!block) return;
 
     setSelectedBlockId(blockId);
+    setShowQuickToolbar(true);
     setIsDragging(true);
 
     const rect = (e.target as HTMLElement).getBoundingClientRect();
@@ -627,8 +642,30 @@ function App() {
     });
   };
 
+  // 縮放處理
+  const handleResizeStart = (e: React.MouseEvent, blockId: string) => {
+    e.stopPropagation();
+    const block = currentImage?.textBlocks.find(b => b.id === blockId);
+    if (!block) return;
+
+    setSelectedBlockId(blockId);
+    setIsResizing(true);
+    setResizeStart({ x: e.clientX, y: e.clientY, fontSize: block.fontSize });
+  };
+
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !selectedBlockId || !canvasRef.current || !currentImage) return;
+    if (!selectedBlockId || !canvasRef.current || !currentImage) return;
+
+    // 處理縮放
+    if (isResizing) {
+      const deltaY = e.clientY - resizeStart.y;
+      const newFontSize = Math.max(8, Math.min(200, resizeStart.fontSize + deltaY / 2));
+      updateBlock(selectedBlockId, { fontSize: Math.round(newFontSize) });
+      return;
+    }
+
+    // 處理拖曳
+    if (!isDragging) return;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
     const newX = Math.max(0, e.clientX - canvasRect.left - dragOffset.x);
@@ -650,7 +687,17 @@ function App() {
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setIsResizing(false);
     setAlignmentGuides({ x: null, y: null });
+  };
+
+  // 快速調整字體大小
+  const adjustFontSize = (delta: number) => {
+    if (!selectedBlockId || !currentImage) return;
+    const block = currentImage.textBlocks.find(b => b.id === selectedBlockId);
+    if (!block) return;
+    const newSize = Math.max(8, Math.min(200, block.fontSize + delta));
+    updateBlock(selectedBlockId, { fontSize: newSize });
   };
 
   // 輸出單張圖片
@@ -880,13 +927,12 @@ function App() {
                 </div>
 
                 <div className="processing-actions">
-                  <button onClick={reset} className="btn secondary">重新上傳</button>
                   <button
                     onClick={startTemplateSetup}
-                    className="btn primary"
+                    className="btn primary full-width"
                     disabled={!images.some(img => img.translatedText)}
                   >
-                    設定模板排版
+                    設定模板排版 →
                   </button>
                 </div>
               </div>
@@ -955,9 +1001,54 @@ function App() {
                     onMouseDown={(e) => handleMouseDown(e, block.id)}
                   >
                     {block.translatedText}
+                    {/* 縮放把手 */}
+                    {selectedBlockId === block.id && (
+                      <div
+                        className="resize-handle"
+                        onMouseDown={(e) => handleResizeStart(e, block.id)}
+                      />
+                    )}
                   </div>
                 ))}
+
               </div>
+
+              {/* 快速工具列 (在畫布外，不會被輸出捕捉) */}
+              {selectedBlockId && showQuickToolbar && currentImage.textBlocks.find(b => b.id === selectedBlockId) && (
+                <div className="quick-toolbar-container">
+                  <div className="quick-toolbar">
+                    <button onClick={() => adjustFontSize(-4)} title="縮小">A-</button>
+                    <span className="font-size-display">
+                      {currentImage.textBlocks.find(b => b.id === selectedBlockId)?.fontSize}px
+                    </span>
+                    <button onClick={() => adjustFontSize(4)} title="放大">A+</button>
+                    <div className="toolbar-divider" />
+                    <div className="color-presets">
+                      {PRESET_COLORS.map(color => (
+                        <button
+                          key={color}
+                          className={`color-preset ${currentImage.textBlocks.find(b => b.id === selectedBlockId)?.color === color ? 'active' : ''}`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => updateBlock(selectedBlockId, { color })}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                    <div className="toolbar-divider" />
+                    <button
+                      onClick={() => {
+                        const block = currentImage.textBlocks.find(b => b.id === selectedBlockId);
+                        if (block) updateBlock(selectedBlockId, { fontWeight: block.fontWeight === 'bold' ? 'normal' : 'bold' });
+                      }}
+                      className={currentImage.textBlocks.find(b => b.id === selectedBlockId)?.fontWeight === 'bold' ? 'active' : ''}
+                      title="粗體"
+                    >
+                      B
+                    </button>
+                    <button onClick={() => deleteBlock(selectedBlockId)} className="delete-btn" title="刪除">×</button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="controls-panel">
@@ -1260,8 +1351,7 @@ function App() {
               )}
 
               <div className="export-actions">
-                <button onClick={reset} className="btn secondary">重新開始</button>
-                <button onClick={confirmTemplate} className="btn primary">
+                <button onClick={confirmTemplate} className="btn primary full-width">
                   確認模板 →
                 </button>
               </div>
@@ -1387,10 +1477,6 @@ function App() {
                     {loading ? '輸出中...' : `輸出全部 (${images.length} 張)`}
                   </button>
                 </div>
-
-                <button onClick={reset} className="btn secondary full-width">
-                  重新開始
-                </button>
               </div>
             </div>
           </div>
