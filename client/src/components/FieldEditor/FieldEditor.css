@@ -1,0 +1,429 @@
+/* ==================== */
+/* Field Editor Layout  */
+/* ==================== */
+.field-editor {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
+  height: calc(100vh - 180px);
+  min-height: 500px;
+}
+
+@media (max-width: 1024px) {
+  .field-editor {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
+/* ==================== */
+/* Canvas Area          */
+/* ==================== */
+.field-editor-canvas-area {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.field-editor-canvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.field-editor-canvas-header h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.field-editor-canvas-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.field-editor-canvas-wrapper {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+}
+
+.field-editor-canvas {
+  position: relative;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  box-shadow: var(--shadow-lg);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ==================== */
+/* Field Item (Box)     */
+/* ==================== */
+.field-item {
+  position: absolute;
+  border: 2px dashed rgba(99, 102, 241, 0.5);
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: move;
+  user-select: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 80px;
+  min-height: 32px;
+}
+
+.field-item:hover {
+  border-color: var(--primary);
+}
+
+.field-item.selected {
+  border-style: solid;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.field-item.dragging {
+  opacity: 0.8;
+  cursor: grabbing;
+}
+
+/* Field Name Label */
+.field-label {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  background: var(--primary);
+  color: white;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px 4px 0 0;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.field-item:not(.selected) .field-label {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+/* Field Preview Text */
+.field-preview-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.7;
+  overflow: hidden;
+  max-height: 100%;
+}
+
+/* Resize Handle */
+.field-resize-handle {
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 24px;
+  background: var(--primary);
+  border-radius: 4px;
+  cursor: ew-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.field-item:hover .field-resize-handle,
+.field-item.selected .field-resize-handle {
+  opacity: 1;
+}
+
+.field-resize-handle:hover {
+  background: var(--primary-hover);
+}
+
+/* ==================== */
+/* Side Panel           */
+/* ==================== */
+.field-editor-panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: var(--shadow-sm);
+  overflow-y: auto;
+  max-height: calc(100vh - 180px);
+}
+
+.field-editor-panel h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* ==================== */
+/* Field List           */
+/* ==================== */
+.field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-list-item {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.field-list-item:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.field-list-item.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.field-list-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.field-list-item-drag-handle {
+  color: var(--text-muted);
+  cursor: grab;
+  font-size: 1rem;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.field-list-item-drag-handle:active {
+  cursor: grabbing;
+}
+
+.field-list-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-list-item-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+
+.field-list-item-info {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.field-list-item-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  font-size: 1rem;
+  opacity: 0;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.field-list-item:hover .field-list-item-delete {
+  opacity: 1;
+}
+
+.field-list-item-delete:hover {
+  color: var(--error);
+}
+
+/* Add Field Button */
+.field-list-add-btn {
+  background: var(--surface-alt);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.field-list-add-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+/* ==================== */
+/* Field Settings       */
+/* ==================== */
+.field-settings {
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field-settings-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.field-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.field-settings-row label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  min-width: 50px;
+}
+
+.field-settings-row input[type="text"],
+.field-settings-row input[type="number"],
+.field-settings-row select {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.625rem;
+  color: var(--text);
+  font-size: 0.85rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.field-settings-row input:focus,
+.field-settings-row select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.field-settings-row input[type="color"] {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 2px;
+  background: var(--surface);
+}
+
+.field-settings-row input[type="color"]:hover {
+  border-color: var(--primary);
+}
+
+/* Alignment Buttons */
+.field-settings-align {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.field-settings-align button {
+  flex: 1;
+  padding: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text);
+  transition: all 0.15s;
+}
+
+.field-settings-align button:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.field-settings-align button.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+/* Empty State */
+.field-settings-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* ==================== */
+/* Keyboard Shortcuts   */
+/* ==================== */
+.field-editor-shortcuts {
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 0.75rem;
+  margin-top: auto;
+}
+
+.field-editor-shortcuts-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.field-editor-shortcuts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.65rem;
+  color: var(--primary);
+}
+
+.field-editor-shortcut-item kbd {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: inherit;
+  font-size: 0.6rem;
+}

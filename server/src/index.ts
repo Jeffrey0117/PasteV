@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import ocrRouter from './routes/ocr.js';
 import translateRouter from './routes/translate.js';
 import generateRouter from './routes/generate.js';
+import parseRouter from './routes/parse.js';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/api/ocr', ocrRouter);
 app.use('/api/translate', translateRouter);
 app.use('/api/generate', generateRouter);
+app.use('/api/parse', parseRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
