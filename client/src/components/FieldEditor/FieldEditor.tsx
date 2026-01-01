@@ -237,6 +237,7 @@ export function FieldEditor({
                 onSelect={() => onSelectField(field.id)}
                 onDrag={(x, y) => handleFieldDrag(field.id, x, y)}
                 onResize={(width) => handleFieldResize(field.id, width)}
+                onUpdate={(updates) => handleFieldUpdate(field.id, updates)}
                 canvasBounds={{
                   width: canvasSettings.width,
                   height: canvasSettings.height,

@@ -132,6 +132,23 @@ export interface CanvasSettings {
 }
 
 /**
+ * 儲存的模板設定
+ * 包含欄位模板、畫布設定、靜態文字
+ */
+export interface SavedTemplate {
+  /** 模板名稱 */
+  name: string;
+  /** 儲存時間 */
+  savedAt: string;
+  /** 版本號 */
+  version: string;
+  /** 欄位模板 */
+  fieldTemplates: FieldTemplate[];
+  /** 畫布設定 */
+  canvasSettings: CanvasSettings;
+}
+
+/**
  * 靜態文字 (浮水印/Logo)
  * 會顯示在所有圖片上的固定文字
  */

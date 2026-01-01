@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
-import type { ImageData, FieldTemplate, CanvasSettings, StaticText } from '../../types';
+import type { ImageData, FieldTemplate, CanvasSettings, StaticText, SavedTemplate } from '../../types';
 import ExportButton from './ExportButton';
 import './Preview.css';
 
@@ -58,7 +58,8 @@ const Preview: React.FC<PreviewProps> = ({
 
   // Resize state
   const [isResizing, setIsResizing] = useState(false);
-  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, fontSize: 16 });
+  const [resizeType, setResizeType] = useState<'font' | 'width-left' | 'width-right' | null>(null);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, fontSize: 16, width: 0, fieldX: 0 });
 
   const currentImage = images[currentIndex];
   // Per-image static texts
@@ -272,6 +273,65 @@ const Preview: React.FC<PreviewProps> = ({
     [images, currentImage, onImagesChange, templateStaticTexts, imageStaticTexts, canvasSettings, onCanvasSettingsChange, selectStatic]
   );
 
+  // Save template to file
+  const saveTemplate = useCallback(() => {
+    const template: SavedTemplate = {
+      name: 'PasteV Template',
+      savedAt: new Date().toISOString(),
+      version: '1.0',
+      fieldTemplates: fields,
+      canvasSettings: canvasSettings,
+    };
+
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pastev-template-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [fields, canvasSettings]);
+
+  // Load template from file
+  const loadTemplate = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const template = JSON.parse(ev.target?.result as string) as SavedTemplate;
+
+        // Validate template structure
+        if (!template.fieldTemplates || !template.canvasSettings) {
+          alert('Invalid template file format');
+          return;
+        }
+
+        // Apply field templates
+        if (onFieldsChange) {
+          onFieldsChange(template.fieldTemplates);
+        }
+
+        // Apply canvas settings
+        if (onCanvasSettingsChange) {
+          onCanvasSettingsChange(template.canvasSettings);
+        }
+
+        alert(`Template loaded: ${template.name || 'Unnamed'}`);
+      } catch (err) {
+        alert('Failed to parse template file');
+        console.error('Template load error:', err);
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset input so same file can be loaded again
+    e.target.value = '';
+  }, [onFieldsChange, onCanvasSettingsChange]);
+
   // Get canvas position from mouse event
   const getCanvasPos = useCallback((e: React.MouseEvent | MouseEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -330,8 +390,8 @@ const Preview: React.FC<PreviewProps> = ({
     const handleMouseMove = (e: MouseEvent) => {
       const pos = getCanvasPos(e);
 
-      // Handle resize for static text
-      if (isResizing && selectedStaticId) {
+      // Handle resize for static text (font size only)
+      if (isResizing && selectedStaticId && resizeType === 'font') {
         const deltaY = pos.y - resizeStart.y;
         const scaleFactor = (resizeStart.fontSize + deltaY) / resizeStart.fontSize;
         const newFontSize = Math.max(8, Math.min(200, Math.round(resizeStart.fontSize * scaleFactor)));
@@ -343,10 +403,28 @@ const Preview: React.FC<PreviewProps> = ({
       if (isResizing && selectedFieldId) {
         const field = fields.find(f => f.id === selectedFieldId);
         if (!field) return;
-        const deltaY = pos.y - resizeStart.y;
-        const scaleFactor = (resizeStart.fontSize + deltaY) / resizeStart.fontSize;
-        const newFontSize = Math.max(8, Math.min(200, Math.round(resizeStart.fontSize * scaleFactor)));
-        updateField(selectedFieldId, { fontSize: newFontSize });
+
+        if (resizeType === 'font') {
+          // Font size resize (corner handle)
+          const deltaY = pos.y - resizeStart.y;
+          const scaleFactor = (resizeStart.fontSize + deltaY) / resizeStart.fontSize;
+          const newFontSize = Math.max(8, Math.min(200, Math.round(resizeStart.fontSize * scaleFactor)));
+          updateField(selectedFieldId, { fontSize: newFontSize });
+        } else if (resizeType === 'width-right') {
+          // Width resize from right
+          const deltaX = pos.x - resizeStart.x;
+          const newWidth = Math.max(80, Math.round(resizeStart.width + deltaX));
+          const maxWidth = canvasSettings.width - field.x;
+          updateField(selectedFieldId, { width: Math.min(newWidth, maxWidth) });
+        } else if (resizeType === 'width-left') {
+          // Width resize from left (also adjusts x position)
+          const deltaX = pos.x - resizeStart.x;
+          const newX = resizeStart.fieldX + deltaX;
+          const newWidth = resizeStart.width - deltaX;
+          if (newWidth >= 80 && newX >= 0) {
+            updateField(selectedFieldId, { x: Math.round(newX), width: Math.round(newWidth) });
+          }
+        }
         return;
       }
 
@@ -368,6 +446,7 @@ const Preview: React.FC<PreviewProps> = ({
     const handleMouseUp = () => {
       setIsDragging(false);
       setIsResizing(false);
+      setResizeType(null);
       setDragType(null);
     };
 
@@ -379,9 +458,9 @@ const Preview: React.FC<PreviewProps> = ({
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, isResizing, selectedFieldId, selectedStaticId, dragStartPos, dragStartItemPos, resizeStart, dragType, getCanvasPos, updateField, updateStaticText, fields]);
+  }, [isDragging, isResizing, resizeType, selectedFieldId, selectedStaticId, dragStartPos, dragStartItemPos, resizeStart, dragType, getCanvasPos, updateField, updateStaticText, fields, canvasSettings.width]);
 
-  // Resize handle mouse down
+  // Font resize handle mouse down (corner)
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent, fontSize: number) => {
       e.preventDefault();
@@ -389,7 +468,36 @@ const Preview: React.FC<PreviewProps> = ({
 
       const pos = getCanvasPos(e);
       setIsResizing(true);
-      setResizeStart({ x: pos.x, y: pos.y, fontSize });
+      setResizeType('font');
+      setResizeStart({ x: pos.x, y: pos.y, fontSize, width: 0, fieldX: 0 });
+    },
+    [getCanvasPos]
+  );
+
+  // Width resize handle mouse down (left)
+  const handleWidthResizeLeftMouseDown = useCallback(
+    (e: React.MouseEvent, field: FieldTemplate) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const pos = getCanvasPos(e);
+      setIsResizing(true);
+      setResizeType('width-left');
+      setResizeStart({ x: pos.x, y: pos.y, fontSize: field.fontSize, width: field.width, fieldX: field.x });
+    },
+    [getCanvasPos]
+  );
+
+  // Width resize handle mouse down (right)
+  const handleWidthResizeRightMouseDown = useCallback(
+    (e: React.MouseEvent, field: FieldTemplate) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const pos = getCanvasPos(e);
+      setIsResizing(true);
+      setResizeType('width-right');
+      setResizeStart({ x: pos.x, y: pos.y, fontSize: field.fontSize, width: field.width, fieldX: field.x });
     },
     [getCanvasPos]
   );
@@ -700,11 +808,26 @@ const Preview: React.FC<PreviewProps> = ({
                     {displayText}
 
                     {isSelected && onFieldsChange && (
-                      <div
-                        className="resize-handle resize-handle-se"
-                        onMouseDown={(e) => handleResizeMouseDown(e, field.fontSize)}
-                        title="Drag to resize font"
-                      />
+                      <>
+                        {/* Left handle - adjust width from left */}
+                        <div
+                          className="resize-handle resize-handle-w"
+                          onMouseDown={(e) => handleWidthResizeLeftMouseDown(e, field)}
+                          title="拖曳調整寬度 (左)"
+                        />
+                        {/* Right handle - adjust width from right */}
+                        <div
+                          className="resize-handle resize-handle-e"
+                          onMouseDown={(e) => handleWidthResizeRightMouseDown(e, field)}
+                          title="拖曳調整寬度 (右)"
+                        />
+                        {/* Corner handle - adjust font size */}
+                        <div
+                          className="resize-handle resize-handle-se"
+                          onMouseDown={(e) => handleResizeMouseDown(e, field.fontSize)}
+                          title="拖曳調整字體大小"
+                        />
+                      </>
                     )}
                   </div>
                 );
@@ -877,6 +1000,22 @@ const Preview: React.FC<PreviewProps> = ({
                   ))}
                 </div>
               )}
+
+              {/* Save/Load Template */}
+              <div className="template-actions">
+                <button className="btn-template-action save" onClick={saveTemplate} title="Save all settings to file">
+                  Save Template
+                </button>
+                <label className="btn-template-action load" title="Load settings from file">
+                  Load Template
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={loadTemplate}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
             </div>
           )}
 

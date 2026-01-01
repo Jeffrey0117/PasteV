@@ -68,6 +68,7 @@
   box-shadow: var(--shadow-lg);
   border-radius: 4px;
   flex-shrink: 0;
+  overflow: visible;
 }
 
 /* ==================== */
@@ -83,6 +84,7 @@
   transition: border-color 0.15s, box-shadow 0.15s;
   min-width: 80px;
   min-height: 32px;
+  overflow: visible;
 }
 
 .field-item:hover {
@@ -128,28 +130,66 @@
   max-height: 100%;
 }
 
-/* Resize Handle */
+/* Resize Handles */
 .field-resize-handle {
   position: absolute;
-  right: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 8px;
-  height: 24px;
   background: var(--primary);
-  border-radius: 4px;
-  cursor: ew-resize;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.field-item:hover .field-resize-handle,
-.field-item.selected .field-resize-handle {
-  opacity: 1;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s, background 0.15s;
 }
 
 .field-resize-handle:hover {
   background: var(--primary-hover);
+  transform: scale(1.2);
+}
+
+/* Left handle - for width adjustment from left */
+.field-resize-left {
+  width: 10px;
+  height: 10px;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.field-resize-left:hover {
+  transform: translateY(-50%) scale(1.2);
+}
+
+/* Right handle - for width adjustment from right */
+.field-resize-right {
+  width: 10px;
+  height: 10px;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.field-resize-right:hover {
+  transform: translateY(-50%) scale(1.2);
+}
+
+/* Corner handle - for font size adjustment */
+.field-resize-corner {
+  width: 12px;
+  height: 12px;
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+
+.field-resize-corner:hover {
+  transform: scale(1.2);
+}
+
+/* Show cursor feedback when resizing */
+.field-item.resizing {
+  cursor: default;
 }
 
 /* ==================== */

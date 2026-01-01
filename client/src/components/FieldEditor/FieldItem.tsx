@@ -7,8 +7,11 @@ interface FieldItemProps {
   onSelect: () => void;
   onDrag: (x: number, y: number) => void;
   onResize: (width: number) => void;
+  onUpdate: (updates: Partial<FieldTemplate>) => void;
   canvasBounds: { width: number; height: number };
 }
+
+type ResizeType = 'left' | 'right' | 'corner' | null;
 
 /**
  * FieldItem - A draggable and resizable field box on the canvas
@@ -19,13 +22,14 @@ export function FieldItem({
   onSelect,
   onDrag,
   onResize,
+  onUpdate,
   canvasBounds,
 }: FieldItemProps) {
   const itemRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
+  const [resizeType, setResizeType] = useState<ResizeType>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
-  const resizeStart = useRef({ x: 0, width: 0 });
+  const resizeStart = useRef({ x: 0, y: 0, width: 0, fieldX: 0, fontSize: 16 });
 
   // Handle drag start
   const handleMouseDown = useCallback(
@@ -52,8 +56,8 @@ export function FieldItem({
     [onSelect]
   );
 
-  // Handle resize start
-  const handleResizeMouseDown = useCallback(
+  // Handle resize start (right handle - width)
+  const handleResizeRightMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -61,12 +65,55 @@ export function FieldItem({
 
       resizeStart.current = {
         x: e.clientX,
+        y: e.clientY,
         width: field.width,
+        fieldX: field.x,
+        fontSize: field.fontSize,
       };
 
-      setIsResizing(true);
+      setResizeType('right');
     },
-    [onSelect, field.width]
+    [onSelect, field.width, field.x, field.fontSize]
+  );
+
+  // Handle resize start (left handle - width + position)
+  const handleResizeLeftMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect();
+
+      resizeStart.current = {
+        x: e.clientX,
+        y: e.clientY,
+        width: field.width,
+        fieldX: field.x,
+        fontSize: field.fontSize,
+      };
+
+      setResizeType('left');
+    },
+    [onSelect, field.width, field.x, field.fontSize]
+  );
+
+  // Handle resize start (corner handle - font size)
+  const handleResizeCornerMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect();
+
+      resizeStart.current = {
+        x: e.clientX,
+        y: e.clientY,
+        width: field.width,
+        fieldX: field.x,
+        fontSize: field.fontSize,
+      };
+
+      setResizeType('corner');
+    },
+    [onSelect, field.width, field.x, field.fontSize]
   );
 
   // Handle drag move
@@ -103,20 +150,36 @@ export function FieldItem({
 
   // Handle resize move
   useEffect(() => {
-    if (!isResizing) return;
+    if (!resizeType) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - resizeStart.current.x;
-      const newWidth = Math.max(80, resizeStart.current.width + deltaX);
-      // Bound width to canvas
-      const maxWidth = canvasBounds.width - field.x;
-      const boundedWidth = Math.min(newWidth, maxWidth);
+      const deltaY = e.clientY - resizeStart.current.y;
 
-      onResize(Math.round(boundedWidth));
+      if (resizeType === 'right') {
+        // Right handle: adjust width only
+        const newWidth = Math.max(80, resizeStart.current.width + deltaX);
+        const maxWidth = canvasBounds.width - field.x;
+        const boundedWidth = Math.min(newWidth, maxWidth);
+        onResize(Math.round(boundedWidth));
+      } else if (resizeType === 'left') {
+        // Left handle: adjust width and x position
+        const newX = resizeStart.current.fieldX + deltaX;
+        const newWidth = resizeStart.current.width - deltaX;
+
+        if (newWidth >= 80 && newX >= 0) {
+          onUpdate({ x: Math.round(newX), width: Math.round(newWidth) });
+        }
+      } else if (resizeType === 'corner') {
+        // Corner handle: adjust font size
+        const scaleFactor = (resizeStart.current.fontSize + deltaY) / resizeStart.current.fontSize;
+        const newFontSize = Math.max(8, Math.min(200, Math.round(resizeStart.current.fontSize * scaleFactor)));
+        onUpdate({ fontSize: newFontSize });
+      }
     };
 
     const handleMouseUp = () => {
-      setIsResizing(false);
+      setResizeType(null);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -126,12 +189,14 @@ export function FieldItem({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, onResize, canvasBounds.width, field.x]);
+  }, [resizeType, onResize, onUpdate, canvasBounds.width, field.x]);
+
+  const isResizing = resizeType !== null;
 
   return (
     <div
       ref={itemRef}
-      className={`field-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`field-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''} ${isResizing ? 'resizing' : ''}`}
       style={{
         left: field.x,
         top: field.y,
@@ -151,8 +216,29 @@ export function FieldItem({
         Sample Text
       </div>
 
-      {/* Resize handle */}
-      <div className="field-resize-handle" onMouseDown={handleResizeMouseDown} />
+      {/* Resize handles - only show when selected */}
+      {isSelected && (
+        <>
+          {/* Left handle - adjust width from left side */}
+          <div
+            className="field-resize-handle field-resize-left"
+            onMouseDown={handleResizeLeftMouseDown}
+            title="拖曳調整寬度 (左)"
+          />
+          {/* Right handle - adjust width from right side */}
+          <div
+            className="field-resize-handle field-resize-right"
+            onMouseDown={handleResizeRightMouseDown}
+            title="拖曳調整寬度 (右)"
+          />
+          {/* Corner handle - adjust font size */}
+          <div
+            className="field-resize-handle field-resize-corner"
+            onMouseDown={handleResizeCornerMouseDown}
+            title="拖曳調整字體大小"
+          />
+        </>
+      )}
     </div>
   );
 }
