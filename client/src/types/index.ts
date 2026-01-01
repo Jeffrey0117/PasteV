@@ -43,6 +43,9 @@ export interface FieldTemplate {
 
   /** 字體 (可選) */
   fontFamily?: string;
+
+  /** 顯示模式：translated=翻譯文, original=原文 */
+  displayMode?: 'translated' | 'original';
 }
 
 // ============================================
@@ -101,6 +104,9 @@ export interface ImageData {
 
   /** 處理狀態 */
   status: ImageStatus;
+
+  /** 該圖片專屬的靜態文字 (浮水印/Logo) */
+  staticTexts?: StaticText[];
 }
 
 // ============================================
@@ -120,6 +126,42 @@ export interface CanvasSettings {
   height: number;
   backgroundColor: string;
   backgroundImage?: string;
+  backgroundImageOpacity?: number;
+  /** 模板靜態文字 (套用到所有圖片) */
+  templateStaticTexts?: StaticText[];
+}
+
+/**
+ * 靜態文字 (浮水印/Logo)
+ * 會顯示在所有圖片上的固定文字
+ */
+export interface StaticText {
+  /** 唯一識別碼 */
+  id: string;
+
+  /** 文字內容 */
+  text: string;
+
+  /** X 座標 (px) */
+  x: number;
+
+  /** Y 座標 (px) */
+  y: number;
+
+  /** 字體大小 (px) */
+  fontSize: number;
+
+  /** 字重 */
+  fontWeight: 'normal' | 'bold' | '300' | '500' | '600' | '700' | '800';
+
+  /** 文字顏色 (hex) */
+  color: string;
+
+  /** 透明度 (0-1) */
+  opacity: number;
+
+  /** 旋轉角度 (度) */
+  rotation?: number;
 }
 
 /**
@@ -238,6 +280,7 @@ export function createImageData(base64: string, width: number, height: number): 
     ocrText: '',
     fields: {},
     status: 'pending',
+    staticTexts: [],
   };
 }
 

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
-import type { ImageData, FieldTemplate, CanvasSettings } from '../../types';
+import type { ImageData, FieldTemplate, CanvasSettings, StaticText } from '../../types';
 import ExportButton from './ExportButton';
 import './Preview.css';
 
@@ -12,12 +12,16 @@ export interface PreviewProps {
   images: ImageData[];
   fields: FieldTemplate[];
   onFieldsChange?: (fields: FieldTemplate[]) => void;
+  onImagesChange?: (images: ImageData[]) => void;
   canvasSettings: CanvasSettings;
   onCanvasSettingsChange?: (settings: CanvasSettings) => void;
   currentIndex: number;
   onIndexChange: (index: number) => void;
   onBack: () => void;
 }
+
+// Helper to generate unique ID
+const generateId = () => Math.random().toString(36).substring(2, 9);
 
 /**
  * Preview component with editing capabilities
@@ -26,6 +30,7 @@ const Preview: React.FC<PreviewProps> = ({
   images,
   fields,
   onFieldsChange,
+  onImagesChange,
   canvasSettings,
   onCanvasSettingsChange,
   currentIndex,
@@ -41,19 +46,45 @@ const Preview: React.FC<PreviewProps> = ({
   const [zoom, setZoom] = useState(1);
   const [autoFitZoom, setAutoFitZoom] = useState(1);
 
-  // Editing state
+  // Selection state - can select either field or static text
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [selectedStaticId, setSelectedStaticId] = useState<string | null>(null);
+
+  // Drag state
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
-  const [dragStartFieldPos, setDragStartFieldPos] = useState({ x: 0, y: 0 });
+  const [dragStartItemPos, setDragStartItemPos] = useState({ x: 0, y: 0 });
+  const [dragType, setDragType] = useState<'field' | 'static' | null>(null);
 
   // Resize state
   const [isResizing, setIsResizing] = useState(false);
-  const [resizeHandle, setResizeHandle] = useState<'se' | null>(null);
-  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0, fontSize: 16 });
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, fontSize: 16 });
 
   const currentImage = images[currentIndex];
+  // Per-image static texts
+  const imageStaticTexts = currentImage?.staticTexts || [];
+  // Template static texts (global)
+  const templateStaticTexts = canvasSettings.templateStaticTexts || [];
+  // Combined for rendering
+  const allStaticTexts = [...templateStaticTexts, ...imageStaticTexts];
+
   const selectedField = fields.find((f) => f.id === selectedFieldId);
+  // Check if selected static is template or per-image
+  const selectedTemplateStatic = templateStaticTexts.find((s) => s.id === selectedStaticId);
+  const selectedImageStatic = imageStaticTexts.find((s) => s.id === selectedStaticId);
+  const selectedStatic = selectedTemplateStatic || selectedImageStatic;
+  const isSelectedTemplate = !!selectedTemplateStatic;
+
+  // Clear other selection when selecting
+  const selectField = useCallback((id: string | null) => {
+    setSelectedFieldId(id);
+    setSelectedStaticId(null);
+  }, []);
+
+  const selectStatic = useCallback((id: string | null) => {
+    setSelectedStaticId(id);
+    setSelectedFieldId(null);
+  }, []);
 
   // Calculate auto-fit zoom
   useEffect(() => {
@@ -89,6 +120,158 @@ const Preview: React.FC<PreviewProps> = ({
     [fields, onFieldsChange]
   );
 
+  // Update static text - handles both template and per-image
+  const updateStaticText = useCallback(
+    (staticId: string, updates: Partial<StaticText>) => {
+      // Check if it's a template static text
+      const isTemplate = templateStaticTexts.some((s) => s.id === staticId);
+
+      if (isTemplate && onCanvasSettingsChange) {
+        const updatedTexts = templateStaticTexts.map((s) =>
+          s.id === staticId ? { ...s, ...updates } : s
+        );
+        onCanvasSettingsChange({
+          ...canvasSettings,
+          templateStaticTexts: updatedTexts,
+        });
+      } else if (!isTemplate && onImagesChange && currentImage) {
+        const updatedTexts = (currentImage.staticTexts || []).map((s) =>
+          s.id === staticId ? { ...s, ...updates } : s
+        );
+        onImagesChange(
+          images.map((img) =>
+            img.id === currentImage.id ? { ...img, staticTexts: updatedTexts } : img
+          )
+        );
+      }
+    },
+    [images, currentImage, onImagesChange, templateStaticTexts, canvasSettings, onCanvasSettingsChange]
+  );
+
+  // Add new template static text (applies to all images)
+  const addTemplateStaticText = useCallback(() => {
+    if (!onCanvasSettingsChange) return;
+    const newText: StaticText = {
+      id: generateId(),
+      text: 'Template Text',
+      x: 50,
+      y: 50,
+      fontSize: 24,
+      fontWeight: 'normal',
+      color: '#000000',
+      opacity: 1,
+    };
+    onCanvasSettingsChange({
+      ...canvasSettings,
+      templateStaticTexts: [...templateStaticTexts, newText],
+    });
+    selectStatic(newText.id);
+  }, [canvasSettings, templateStaticTexts, onCanvasSettingsChange, selectStatic]);
+
+  // Add new per-image static text (only for current image)
+  const addImageStaticText = useCallback(() => {
+    if (!onImagesChange || !currentImage) return;
+    const newText: StaticText = {
+      id: generateId(),
+      text: 'Image Text',
+      x: 50,
+      y: 100,
+      fontSize: 24,
+      fontWeight: 'normal',
+      color: '#000000',
+      opacity: 1,
+    };
+    const updatedTexts = [...(currentImage.staticTexts || []), newText];
+    onImagesChange(
+      images.map((img) =>
+        img.id === currentImage.id ? { ...img, staticTexts: updatedTexts } : img
+      )
+    );
+    selectStatic(newText.id);
+  }, [images, currentImage, onImagesChange, selectStatic]);
+
+  // Delete static text - handles both template and per-image
+  const deleteStaticText = useCallback(
+    (id: string) => {
+      const isTemplate = templateStaticTexts.some((s) => s.id === id);
+
+      if (isTemplate && onCanvasSettingsChange) {
+        onCanvasSettingsChange({
+          ...canvasSettings,
+          templateStaticTexts: templateStaticTexts.filter((s) => s.id !== id),
+        });
+      } else if (!isTemplate && onImagesChange && currentImage) {
+        const updatedTexts = (currentImage.staticTexts || []).filter((s) => s.id !== id);
+        onImagesChange(
+          images.map((img) =>
+            img.id === currentImage.id ? { ...img, staticTexts: updatedTexts } : img
+          )
+        );
+      }
+
+      if (selectedStaticId === id) {
+        setSelectedStaticId(null);
+      }
+    },
+    [images, currentImage, onImagesChange, templateStaticTexts, canvasSettings, onCanvasSettingsChange, selectedStaticId]
+  );
+
+  // Convert static text between template and per-image
+  const convertStaticText = useCallback(
+    (id: string) => {
+      const isTemplate = templateStaticTexts.some((s) => s.id === id);
+      const staticText = isTemplate
+        ? templateStaticTexts.find((s) => s.id === id)
+        : imageStaticTexts.find((s) => s.id === id);
+
+      if (!staticText) return;
+
+      // Create a copy with new ID to avoid conflicts
+      const convertedText: StaticText = { ...staticText, id: generateId() };
+
+      if (isTemplate) {
+        // Convert from template to per-image
+        if (!onCanvasSettingsChange || !onImagesChange || !currentImage) return;
+
+        // Remove from template
+        onCanvasSettingsChange({
+          ...canvasSettings,
+          templateStaticTexts: templateStaticTexts.filter((s) => s.id !== id),
+        });
+
+        // Add to current image
+        const updatedTexts = [...(currentImage.staticTexts || []), convertedText];
+        onImagesChange(
+          images.map((img) =>
+            img.id === currentImage.id ? { ...img, staticTexts: updatedTexts } : img
+          )
+        );
+
+        selectStatic(convertedText.id);
+      } else {
+        // Convert from per-image to template
+        if (!onCanvasSettingsChange || !onImagesChange || !currentImage) return;
+
+        // Remove from current image
+        const updatedTexts = (currentImage.staticTexts || []).filter((s) => s.id !== id);
+        onImagesChange(
+          images.map((img) =>
+            img.id === currentImage.id ? { ...img, staticTexts: updatedTexts } : img
+          )
+        );
+
+        // Add to template
+        onCanvasSettingsChange({
+          ...canvasSettings,
+          templateStaticTexts: [...templateStaticTexts, convertedText],
+        });
+
+        selectStatic(convertedText.id);
+      }
+    },
+    [images, currentImage, onImagesChange, templateStaticTexts, imageStaticTexts, canvasSettings, onCanvasSettingsChange, selectStatic]
+  );
+
   // Get canvas position from mouse event
   const getCanvasPos = useCallback((e: React.MouseEvent | MouseEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -110,40 +293,60 @@ const Preview: React.FC<PreviewProps> = ({
       const field = fields.find(f => f.id === fieldId);
       if (!field) return;
 
-      setSelectedFieldId(fieldId);
+      selectField(fieldId);
       const pos = getCanvasPos(e);
       setDragStartPos(pos);
-      setDragStartFieldPos({ x: field.x, y: field.y });
+      setDragStartItemPos({ x: field.x, y: field.y });
+      setDragType('field');
       setIsDragging(true);
     },
-    [onFieldsChange, fields, getCanvasPos]
+    [onFieldsChange, fields, getCanvasPos, selectField]
+  );
+
+  // Mouse down on static text - start drag
+  const handleStaticMouseDown = useCallback(
+    (e: React.MouseEvent, staticId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Allow drag if either onImagesChange or onCanvasSettingsChange is available
+      if (!onImagesChange && !onCanvasSettingsChange) return;
+
+      const staticText = allStaticTexts.find(s => s.id === staticId);
+      if (!staticText) return;
+
+      selectStatic(staticId);
+      const pos = getCanvasPos(e);
+      setDragStartPos(pos);
+      setDragStartItemPos({ x: staticText.x, y: staticText.y });
+      setDragType('static');
+      setIsDragging(true);
+    },
+    [onImagesChange, onCanvasSettingsChange, allStaticTexts, getCanvasPos, selectStatic]
   );
 
   // Mouse move - drag or resize
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!selectedFieldId || !canvasRef.current) return;
-
       const pos = getCanvasPos(e);
 
-      // Handle resize
-      if (isResizing && resizeHandle === 'se') {
-        const deltaX = pos.x - resizeStart.x;
+      // Handle resize for static text
+      if (isResizing && selectedStaticId) {
         const deltaY = pos.y - resizeStart.y;
-
-        // Use the larger delta for proportional scaling
-        const scaleFactor = Math.max(
-          (resizeStart.width + deltaX) / resizeStart.width,
-          (resizeStart.height + deltaY) / resizeStart.height
-        );
-
-        const newWidth = Math.max(50, Math.round(resizeStart.width * scaleFactor));
+        const scaleFactor = (resizeStart.fontSize + deltaY) / resizeStart.fontSize;
         const newFontSize = Math.max(8, Math.min(200, Math.round(resizeStart.fontSize * scaleFactor)));
+        updateStaticText(selectedStaticId, { fontSize: newFontSize });
+        return;
+      }
 
-        updateField(selectedFieldId, {
-          width: newWidth,
-          fontSize: newFontSize,
-        });
+      // Handle resize for field
+      if (isResizing && selectedFieldId) {
+        const field = fields.find(f => f.id === selectedFieldId);
+        if (!field) return;
+        const deltaY = pos.y - resizeStart.y;
+        const scaleFactor = (resizeStart.fontSize + deltaY) / resizeStart.fontSize;
+        const newFontSize = Math.max(8, Math.min(200, Math.round(resizeStart.fontSize * scaleFactor)));
+        updateField(selectedFieldId, { fontSize: newFontSize });
         return;
       }
 
@@ -151,18 +354,21 @@ const Preview: React.FC<PreviewProps> = ({
       if (isDragging) {
         const deltaX = pos.x - dragStartPos.x;
         const deltaY = pos.y - dragStartPos.y;
+        const newX = Math.max(0, Math.round(dragStartItemPos.x + deltaX));
+        const newY = Math.max(0, Math.round(dragStartItemPos.y + deltaY));
 
-        const newX = Math.max(0, Math.round(dragStartFieldPos.x + deltaX));
-        const newY = Math.max(0, Math.round(dragStartFieldPos.y + deltaY));
-
-        updateField(selectedFieldId, { x: newX, y: newY });
+        if (dragType === 'field' && selectedFieldId) {
+          updateField(selectedFieldId, { x: newX, y: newY });
+        } else if (dragType === 'static' && selectedStaticId) {
+          updateStaticText(selectedStaticId, { x: newX, y: newY });
+        }
       }
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
       setIsResizing(false);
-      setResizeHandle(null);
+      setDragType(null);
     };
 
     if (isDragging || isResizing) {
@@ -173,38 +379,26 @@ const Preview: React.FC<PreviewProps> = ({
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, isResizing, selectedFieldId, dragStartPos, dragStartFieldPos, resizeStart, resizeHandle, getCanvasPos, updateField]);
+  }, [isDragging, isResizing, selectedFieldId, selectedStaticId, dragStartPos, dragStartItemPos, resizeStart, dragType, getCanvasPos, updateField, updateStaticText, fields]);
 
   // Resize handle mouse down
   const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent, fontSize: number) => {
       e.preventDefault();
       e.stopPropagation();
 
-      if (!selectedFieldId) return;
-
-      const field = fields.find((f) => f.id === selectedFieldId);
-      if (!field) return;
-
       const pos = getCanvasPos(e);
-
-      setResizeHandle('se');
       setIsResizing(true);
-      setResizeStart({
-        x: pos.x,
-        y: pos.y,
-        width: field.width,
-        height: field.fontSize * 3, // Approximate height based on font size
-        fontSize: field.fontSize,
-      });
+      setResizeStart({ x: pos.x, y: pos.y, fontSize });
     },
-    [selectedFieldId, fields, getCanvasPos]
+    [getCanvasPos]
   );
 
   // Canvas click - deselect
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     if (e.target === canvasRef.current) {
       setSelectedFieldId(null);
+      setSelectedStaticId(null);
     }
   }, []);
 
@@ -227,6 +421,7 @@ const Preview: React.FC<PreviewProps> = ({
     if (!canvasRef.current || exporting) return;
 
     setSelectedFieldId(null);
+    setSelectedStaticId(null);
     const originalZoom = zoom;
     setZoom(1);
     await new Promise((r) => setTimeout(r, 50));
@@ -258,6 +453,7 @@ const Preview: React.FC<PreviewProps> = ({
     if (exporting) return;
 
     setSelectedFieldId(null);
+    setSelectedStaticId(null);
     const originalZoom = zoom;
     setZoom(1);
     await new Promise((r) => setTimeout(r, 50));
@@ -316,12 +512,13 @@ const Preview: React.FC<PreviewProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      // Arrow keys for selected field position
+      // Arrow keys for selected item position
+      const step = e.shiftKey ? 10 : 1;
+
       if (selectedFieldId && onFieldsChange) {
         const field = fields.find((f) => f.id === selectedFieldId);
         if (field && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
           e.preventDefault();
-          const step = e.shiftKey ? 10 : 1;
           switch (e.key) {
             case 'ArrowUp': updateField(selectedFieldId, { y: Math.max(0, field.y - step) }); break;
             case 'ArrowDown': updateField(selectedFieldId, { y: field.y + step }); break;
@@ -332,10 +529,34 @@ const Preview: React.FC<PreviewProps> = ({
         }
       }
 
+      if (selectedStaticId && (onImagesChange || onCanvasSettingsChange)) {
+        const staticText = allStaticTexts.find((s) => s.id === selectedStaticId);
+        if (staticText && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          switch (e.key) {
+            case 'ArrowUp': updateStaticText(selectedStaticId, { y: Math.max(0, staticText.y - step) }); break;
+            case 'ArrowDown': updateStaticText(selectedStaticId, { y: staticText.y + step }); break;
+            case 'ArrowLeft': updateStaticText(selectedStaticId, { x: Math.max(0, staticText.x - step) }); break;
+            case 'ArrowRight': updateStaticText(selectedStaticId, { x: staticText.x + step }); break;
+          }
+          return;
+        }
+
+        // Delete key to delete static text
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          deleteStaticText(selectedStaticId);
+          return;
+        }
+      }
+
       switch (e.key) {
         case 'ArrowLeft': e.preventDefault(); goToPrevious(); break;
         case 'ArrowRight': e.preventDefault(); goToNext(); break;
-        case 'Escape': setSelectedFieldId(null); break;
+        case 'Escape':
+          setSelectedFieldId(null);
+          setSelectedStaticId(null);
+          break;
         case 's':
         case 'S':
           if (e.ctrlKey || e.metaKey) {
@@ -358,7 +579,7 @@ const Preview: React.FC<PreviewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedFieldId, fields, goToPrevious, goToNext, exportSingle, exportAll, updateField, onFieldsChange, zoomIn, zoomOut, zoomFit]);
+  }, [selectedFieldId, selectedStaticId, fields, allStaticTexts, goToPrevious, goToNext, exportSingle, exportAll, updateField, updateStaticText, deleteStaticText, onFieldsChange, onImagesChange, onCanvasSettingsChange, zoomIn, zoomOut, zoomFit]);
 
   if (!currentImage) {
     return (
@@ -424,16 +645,36 @@ const Preview: React.FC<PreviewProps> = ({
                 width: canvasSettings.width,
                 height: canvasSettings.height,
                 backgroundColor: canvasSettings.backgroundColor,
-                backgroundImage: canvasSettings.backgroundImage ? `url(${canvasSettings.backgroundImage})` : undefined,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
                 position: 'relative',
+                overflow: 'hidden',
               }}
               onClick={handleCanvasClick}
             >
+              {/* Background image with opacity */}
+              {canvasSettings.backgroundImage && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundImage: `url(${canvasSettings.backgroundImage})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    opacity: canvasSettings.backgroundImageOpacity ?? 1,
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
+              {/* Field texts */}
               {fields.map((field) => {
                 const content = currentImage.fields[field.id];
-                if (!content?.translated) return null;
+                // Check which text to display based on displayMode
+                const displayText = field.displayMode === 'original'
+                  ? content?.original
+                  : content?.translated;
+                if (!displayText) return null;
 
                 const isSelected = field.id === selectedFieldId;
 
@@ -456,13 +697,51 @@ const Preview: React.FC<PreviewProps> = ({
                     }}
                     onMouseDown={(e) => handleFieldMouseDown(e, field.id)}
                   >
-                    {content.translated}
+                    {displayText}
 
                     {isSelected && onFieldsChange && (
                       <div
                         className="resize-handle resize-handle-se"
-                        onMouseDown={handleResizeMouseDown}
-                        title="Drag to resize and scale font"
+                        onMouseDown={(e) => handleResizeMouseDown(e, field.fontSize)}
+                        title="Drag to resize font"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Static texts (watermarks/logos) - both template and per-image */}
+              {allStaticTexts.map((staticText) => {
+                const isSelected = staticText.id === selectedStaticId;
+                const isTemplate = templateStaticTexts.some((t) => t.id === staticText.id);
+                const canEdit = isTemplate ? !!onCanvasSettingsChange : !!onImagesChange;
+
+                return (
+                  <div
+                    key={staticText.id}
+                    className={`preview-field static-text ${isSelected ? 'selected' : ''} ${canEdit ? 'editable' : ''} ${isTemplate ? 'template' : 'per-image'}`}
+                    style={{
+                      position: 'absolute',
+                      left: staticText.x,
+                      top: staticText.y,
+                      fontSize: staticText.fontSize,
+                      fontWeight: staticText.fontWeight,
+                      color: staticText.color,
+                      opacity: staticText.opacity,
+                      transform: staticText.rotation ? `rotate(${staticText.rotation}deg)` : undefined,
+                      whiteSpace: 'nowrap',
+                      cursor: canEdit && !isResizing ? 'move' : 'default',
+                      fontFamily: '"Microsoft JhengHei", "Noto Sans TC", sans-serif',
+                    }}
+                    onMouseDown={(e) => handleStaticMouseDown(e, staticText.id)}
+                  >
+                    {staticText.text}
+
+                    {isSelected && canEdit && (
+                      <div
+                        className="resize-handle resize-handle-se"
+                        onMouseDown={(e) => handleResizeMouseDown(e, staticText.fontSize)}
+                        title="Drag to resize font"
                       />
                     )}
                   </div>
@@ -504,14 +783,244 @@ const Preview: React.FC<PreviewProps> = ({
                   />
                 </div>
                 <div className="setting-row">
-                  <label>Background</label>
+                  <label>Bg Color</label>
                   <input
                     type="color"
                     value={canvasSettings.backgroundColor}
                     onChange={(e) => onCanvasSettingsChange({ ...canvasSettings, backgroundColor: e.target.value })}
                   />
                 </div>
+                <div className="setting-row">
+                  <label>Bg Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ flex: 1 }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          onCanvasSettingsChange({
+                            ...canvasSettings,
+                            backgroundImage: ev.target?.result as string,
+                            backgroundImageOpacity: canvasSettings.backgroundImageOpacity ?? 1,
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </div>
+                {canvasSettings.backgroundImage && (
+                  <>
+                    <div className="setting-row">
+                      <label>Bg Opacity</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={canvasSettings.backgroundImageOpacity ?? 1}
+                        onChange={(e) => onCanvasSettingsChange({
+                          ...canvasSettings,
+                          backgroundImageOpacity: Number(e.target.value),
+                        })}
+                      />
+                      <span>{Math.round((canvasSettings.backgroundImageOpacity ?? 1) * 100)}%</span>
+                    </div>
+                    <div className="setting-row">
+                      <button
+                        className="btn-secondary"
+                        style={{ flex: 1 }}
+                        onClick={() => onCanvasSettingsChange({
+                          ...canvasSettings,
+                          backgroundImage: undefined,
+                          backgroundImageOpacity: undefined,
+                        })}
+                      >
+                        Remove Background Image
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
+            </div>
+          )}
+
+          {/* Template Static Texts (applies to all images) */}
+          {onCanvasSettingsChange && (
+            <div className="sidebar-section">
+              <h3>Template Texts <span className="section-badge template">All</span></h3>
+              <button className="add-text-btn" onClick={addTemplateStaticText}>
+                + Add Template Text
+              </button>
+              {templateStaticTexts.length > 0 && (
+                <div className="static-text-list">
+                  {templateStaticTexts.map((st) => (
+                    <div
+                      key={st.id}
+                      className={`static-text-item template ${st.id === selectedStaticId ? 'selected' : ''}`}
+                      onClick={() => selectStatic(st.id)}
+                    >
+                      <span className="static-text-preview">{st.text}</span>
+                      <button
+                        className="static-text-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteStaticText(st.id);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Per-Image Static Texts (only for current image) */}
+          {onImagesChange && (
+            <div className="sidebar-section">
+              <h3>Image Texts <span className="section-badge per-image">#{currentIndex + 1}</span></h3>
+              <button className="add-text-btn" onClick={addImageStaticText}>
+                + Add Text (This Image)
+              </button>
+              {imageStaticTexts.length > 0 && (
+                <div className="static-text-list">
+                  {imageStaticTexts.map((st) => (
+                    <div
+                      key={st.id}
+                      className={`static-text-item per-image ${st.id === selectedStaticId ? 'selected' : ''}`}
+                      onClick={() => selectStatic(st.id)}
+                    >
+                      <span className="static-text-preview">{st.text}</span>
+                      <button
+                        className="static-text-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteStaticText(st.id);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected Static Text Settings */}
+          {selectedStatic && (isSelectedTemplate ? onCanvasSettingsChange : onImagesChange) && (
+            <div className="sidebar-section field-settings">
+              <h3>Text Settings <span className={`section-badge ${isSelectedTemplate ? 'template' : 'per-image'}`}>{isSelectedTemplate ? 'Template' : 'Image'}</span></h3>
+
+              <div className="setting-row">
+                <label>Text</label>
+                <input
+                  type="text"
+                  value={selectedStatic.text}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { text: e.target.value })}
+                  style={{ flex: 1 }}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>X</label>
+                <input
+                  type="number"
+                  value={selectedStatic.x}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { x: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>Y</label>
+                <input
+                  type="number"
+                  value={selectedStatic.y}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { y: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>Font Size</label>
+                <input
+                  type="number"
+                  value={selectedStatic.fontSize}
+                  min={8}
+                  max={200}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { fontSize: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>Weight</label>
+                <select
+                  value={selectedStatic.fontWeight}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { fontWeight: e.target.value as StaticText['fontWeight'] })}
+                >
+                  <option value="normal">Normal</option>
+                  <option value="bold">Bold</option>
+                  <option value="300">Light</option>
+                  <option value="500">Medium</option>
+                  <option value="600">Semi Bold</option>
+                  <option value="700">Bold</option>
+                  <option value="800">Extra Bold</option>
+                </select>
+              </div>
+
+              <div className="setting-row">
+                <label>Color</label>
+                <input
+                  type="color"
+                  value={selectedStatic.color}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { color: e.target.value })}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>Opacity</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={selectedStatic.opacity}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { opacity: Number(e.target.value) })}
+                />
+                <span>{Math.round(selectedStatic.opacity * 100)}%</span>
+              </div>
+
+              <div className="setting-row">
+                <label>Rotation</label>
+                <input
+                  type="number"
+                  value={selectedStatic.rotation || 0}
+                  onChange={(e) => updateStaticText(selectedStatic.id, { rotation: Number(e.target.value) })}
+                />
+                <span>°</span>
+              </div>
+
+              {/* Convert button */}
+              {onCanvasSettingsChange && onImagesChange && (
+                <div className="setting-row">
+                  <button
+                    className={`btn-convert ${isSelectedTemplate ? 'to-image' : 'to-template'}`}
+                    onClick={() => convertStaticText(selectedStatic.id)}
+                    title={isSelectedTemplate ? '轉換為圖片專屬文字' : '轉換為模板文字 (套用至所有圖片)'}
+                  >
+                    {isSelectedTemplate ? '→ 轉為 Image Text' : '→ 轉為 Template Text'}
+                  </button>
+                </div>
+              )}
+
+              <p className="setting-hint">
+                Arrow: move 1px | Shift+Arrow: 10px<br />
+                Delete: remove text
+              </p>
             </div>
           )}
 
@@ -601,29 +1110,52 @@ const Preview: React.FC<PreviewProps> = ({
                 </div>
               </div>
 
+              <div className="setting-row">
+                <label>Display</label>
+                <div className="align-buttons">
+                  <button
+                    className={selectedField.displayMode !== 'original' ? 'active' : ''}
+                    onClick={() => updateField(selectedField.id, { displayMode: 'translated' })}
+                    title="顯示翻譯文"
+                  >中文</button>
+                  <button
+                    className={selectedField.displayMode === 'original' ? 'active' : ''}
+                    onClick={() => updateField(selectedField.id, { displayMode: 'original' })}
+                    title="顯示原文"
+                  >EN</button>
+                </div>
+              </div>
+
               <p className="setting-hint">
                 Arrow: move 1px | Shift+Arrow: 10px<br />
-                Drag corner: resize + font scale
+                Drag corner: resize font
               </p>
             </div>
           )}
 
           {/* Field preview list */}
-          {!selectedField && (
+          {!selectedField && !selectedStatic && (
             <div className="sidebar-section">
               <h3>Fields</h3>
               <div className="field-preview-list">
                 {fields.map((field) => {
                   const content = currentImage.fields[field.id];
+                  const isOriginal = field.displayMode === 'original';
+                  const displayText = isOriginal ? content?.original : content?.translated;
                   return (
                     <div
                       key={field.id}
                       className="field-preview-item clickable"
-                      onClick={() => setSelectedFieldId(field.id)}
+                      onClick={() => selectField(field.id)}
                     >
-                      <span className="field-preview-label">{field.name}</span>
+                      <div className="field-preview-header">
+                        <span className="field-preview-label">{field.name}</span>
+                        <span className={`field-mode-badge ${isOriginal ? 'original' : 'translated'}`}>
+                          {isOriginal ? 'EN' : '中'}
+                        </span>
+                      </div>
                       <span className="field-preview-content">
-                        {content?.translated || <em className="no-content">(empty)</em>}
+                        {displayText || <em className="no-content">(empty)</em>}
                       </span>
                     </div>
                   );

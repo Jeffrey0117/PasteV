@@ -537,6 +537,7 @@ function App() {
             images={images}
             fields={fieldTemplates}
             onFieldsChange={setFieldTemplates}
+            onImagesChange={setImages}
             canvasSettings={canvasSettings}
             onCanvasSettingsChange={setCanvasSettings}
             currentIndex={currentImageIndex}
