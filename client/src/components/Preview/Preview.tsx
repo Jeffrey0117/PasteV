@@ -310,9 +310,22 @@ const Preview: React.FC<PreviewProps> = ({
           return;
         }
 
-        // Apply field templates
+        // Apply field templates - preserve existing field IDs to keep image data linked
         if (onFieldsChange) {
-          onFieldsChange(template.fieldTemplates);
+          // Map template fields to existing fields by index, preserving IDs
+          const mergedFields = template.fieldTemplates.map((templateField, index) => {
+            const existingField = fields[index];
+            if (existingField) {
+              // Keep existing ID, update all other properties
+              return {
+                ...templateField,
+                id: existingField.id,
+              };
+            }
+            // New field from template (no existing field at this index)
+            return templateField;
+          });
+          onFieldsChange(mergedFields);
         }
 
         // Apply canvas settings
@@ -330,7 +343,7 @@ const Preview: React.FC<PreviewProps> = ({
 
     // Reset input so same file can be loaded again
     e.target.value = '';
-  }, [onFieldsChange, onCanvasSettingsChange]);
+  }, [onFieldsChange, onCanvasSettingsChange, fields]);
 
   // Get canvas position from mouse event
   const getCanvasPos = useCallback((e: React.MouseEvent | MouseEvent) => {
