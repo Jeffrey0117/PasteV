@@ -23,7 +23,6 @@ export function BlockItem({
   isSelected,
   onSelect,
   onDrag,
-  onResize,
   onUpdate,
   canvasBounds,
   scale,

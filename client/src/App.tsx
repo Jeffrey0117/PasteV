@@ -15,6 +15,7 @@ import { createDefaultProject, generateId, createDefaultField } from './types';
 import { FieldEditor } from './components/FieldEditor';
 import { TableEditor } from './components/TableEditor';
 import { Preview } from './components/Preview';
+import { SmartModePage } from './components/SmartMode';
 
 const API_BASE = 'http://localhost:3001/api';
 
@@ -423,15 +424,15 @@ function App() {
               {images.length > 0 && `(${images.length} 張圖片)`}
             </p>
           </div>
-          {currentStep !== 'upload' && (
+          {currentStep !== 'upload' && currentStep !== 'smart' && (
             <button onClick={reset} className="btn secondary">
               重新開始
             </button>
           )}
         </div>
 
-        {/* Step indicator */}
-        {currentStep !== 'upload' && (
+        {/* Step indicator - only show for template mode */}
+        {currentStep !== 'upload' && currentStep !== 'smart' && (
           <div className="step-indicator">
             <div
               className={`step-item ${currentStep === 'fields' ? 'active' : ''} ${
@@ -479,25 +480,50 @@ function App() {
       )}
 
       <main className="main">
-        {/* Step 1: Upload */}
+        {/* Step 1: Upload / Mode Selection */}
         {currentStep === 'upload' && (
-          <div
-            className="upload-zone"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageUpload}
-              hidden
-            />
-            <div className="upload-icon">📷</div>
-            <p>點擊上傳要翻譯的圖片</p>
-            <p className="upload-hint">
-              支援多張圖片，將自動進行 OCR 識別
-            </p>
+          <div className="upload-container">
+            {/* Mode Selection */}
+            <div className="mode-selection">
+              <h2>選擇模式</h2>
+              <div className="mode-buttons">
+                <div className="mode-card active">
+                  <div className="mode-icon">T</div>
+                  <div className="mode-info">
+                    <h3>Template Mode</h3>
+                    <p>定義欄位模板，批量處理相同版型的圖片</p>
+                  </div>
+                </div>
+                <div className="mode-card" onClick={() => goToStep('smart')}>
+                  <div className="mode-icon mode-icon-smart">AI</div>
+                  <div className="mode-info">
+                    <h3>Smart Mode</h3>
+                    <p>AI 自動偵測文字區塊，智慧翻譯並保留原始排版</p>
+                  </div>
+                  <span className="mode-badge">NEW</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Upload Zone for Template Mode */}
+            <div
+              className="upload-zone"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageUpload}
+                hidden
+              />
+              <div className="upload-icon">+</div>
+              <p>點擊上傳要翻譯的圖片</p>
+              <p className="upload-hint">
+                支援多張圖片，將自動進行 OCR 識別
+              </p>
+            </div>
           </div>
         )}
 
@@ -572,6 +598,11 @@ function App() {
             onIndexChange={setCurrentImageIndex}
             onBack={() => goToStep('edit')}
           />
+        )}
+
+        {/* Smart Mode */}
+        {currentStep === 'smart' && (
+          <SmartModePage onBack={() => goToStep('upload')} />
         )}
       </main>
 

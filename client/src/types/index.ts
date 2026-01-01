@@ -188,7 +188,8 @@ export type AppStep =
   | 'upload'    // 上傳圖片
   | 'fields'    // 定義欄位
   | 'edit'      // 表格編輯
-  | 'preview';  // 預覽輸出
+  | 'preview'   // 預覽輸出
+  | 'smart';    // Smart Mode
 
 /** 畫布設定 */
 export interface CanvasSettings {

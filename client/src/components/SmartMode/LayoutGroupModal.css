@@ -1,0 +1,419 @@
+/* ==================== */
+/* Modal Overlay        */
+/* ==================== */
+.layout-group-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 2rem;
+}
+
+/* ==================== */
+/* Modal Container      */
+/* ==================== */
+.layout-group-modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 720px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ==================== */
+/* Modal Header         */
+/* ==================== */
+.layout-group-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface-alt);
+}
+
+.layout-group-modal-header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.layout-group-modal-header .modal-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: 0.5rem;
+}
+
+.layout-group-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  transition: all 0.15s;
+}
+
+.layout-group-modal-close:hover {
+  background: var(--border-light);
+  color: var(--text);
+}
+
+/* ==================== */
+/* Modal Body           */
+/* ==================== */
+.layout-group-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ==================== */
+/* Group Card           */
+/* ==================== */
+.layout-group-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.25rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.layout-group-card:hover {
+  border-color: var(--border);
+}
+
+.layout-group-card.independent {
+  background: var(--surface);
+  border-style: dashed;
+}
+
+/* Group Header */
+.layout-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.layout-group-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.layout-group-icon {
+  font-size: 1.25rem;
+}
+
+.layout-group-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.layout-group-count {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+}
+
+.layout-group-similarity {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.similarity-badge {
+  background: var(--success-light);
+  color: var(--success);
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+
+.similarity-badge.medium {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.similarity-badge.low {
+  background: var(--error-light);
+  color: var(--error);
+}
+
+/* Thumbnails Row */
+.layout-group-thumbnails {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  overflow-x: auto;
+  margin: 0 -0.25rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.layout-group-thumbnails::-webkit-scrollbar {
+  height: 4px;
+}
+
+.layout-group-thumbnails::-webkit-scrollbar-track {
+  background: var(--border-light);
+  border-radius: 2px;
+}
+
+.layout-group-thumbnails::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.layout-group-thumbnail {
+  position: relative;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+  box-shadow: var(--shadow-sm);
+}
+
+.layout-group-thumbnail:hover {
+  border-color: var(--primary);
+  transform: scale(1.05);
+}
+
+.layout-group-thumbnail.representative {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.layout-group-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.layout-group-thumbnail .representative-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background: var(--primary);
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.layout-group-thumbnail .thumbnail-index {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+/* More indicator */
+.layout-group-thumbnail.more-indicator {
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.layout-group-thumbnail.more-indicator span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Checkbox Option */
+.layout-group-option {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-light);
+  margin-top: 0.5rem;
+}
+
+.layout-group-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.layout-group-option label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.layout-group-option:hover label {
+  color: var(--text);
+}
+
+.layout-group-option.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ==================== */
+/* Modal Footer         */
+/* ==================== */
+.layout-group-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-light);
+  background: var(--surface-alt);
+}
+
+.layout-group-modal-footer .btn {
+  min-width: 100px;
+}
+
+/* ==================== */
+/* Summary Stats        */
+/* ==================== */
+.layout-group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 0.75rem 1rem;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+}
+
+.layout-group-summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.layout-group-summary-item .summary-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.layout-group-summary-item .summary-label {
+  font-size: 0.75rem;
+  color: var(--primary-hover);
+  font-weight: 500;
+}
+
+/* ==================== */
+/* Empty State          */
+/* ==================== */
+.layout-group-empty {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-muted);
+}
+
+.layout-group-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.layout-group-empty p {
+  font-size: 0.95rem;
+}
+
+/* ==================== */
+/* Responsive           */
+/* ==================== */
+@media (max-width: 640px) {
+  .layout-group-modal-overlay {
+    padding: 1rem;
+  }
+
+  .layout-group-modal {
+    max-height: 90vh;
+  }
+
+  .layout-group-modal-header {
+    padding: 1rem;
+  }
+
+  .layout-group-modal-body {
+    padding: 1rem;
+  }
+
+  .layout-group-modal-footer {
+    padding: 0.75rem 1rem;
+  }
+
+  .layout-group-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .layout-group-similarity {
+    margin-left: 2rem;
+  }
+
+  .layout-group-summary {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+}

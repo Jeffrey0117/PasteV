@@ -33,13 +33,6 @@ export interface Region {
   height: number;
 }
 
-/**
- * 顏色統計
- */
-interface ColorCount {
-  color: string;
-  count: number;
-}
 
 // ============================================
 // 工具函式
