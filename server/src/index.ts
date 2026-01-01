@@ -8,6 +8,7 @@ import ocrRouter from './routes/ocr.js';
 import translateRouter from './routes/translate.js';
 import generateRouter from './routes/generate.js';
 import parseRouter from './routes/parse.js';
+import detectBlocksRouter from './routes/detect-blocks.js';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/ocr', ocrRouter);
 app.use('/api/translate', translateRouter);
 app.use('/api/generate', generateRouter);
 app.use('/api/parse', parseRouter);
+app.use('/api/detect-blocks', detectBlocksRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

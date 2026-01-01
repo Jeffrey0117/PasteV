@@ -78,7 +78,64 @@ export type ImageStatus =
   | 'translating'  // 翻譯中
   | 'translated'   // 翻譯完成
   | 'ready'        // 就緒可輸出
-  | 'error';       // 錯誤
+  | 'error'        // 錯誤
+  // Smart Mode 狀態
+  | 'detecting'    // 偵測文字區塊中
+  | 'detected'     // 偵測完成
+  | 'inpainting'   // 移除文字中
+  | 'inpainted';   // 移除完成
+
+// ============================================
+// Smart Mode 型別
+// ============================================
+
+/**
+ * 文字區塊
+ * Smart Mode 偵測到的單一文字區塊
+ */
+export interface TextBlock {
+  /** 唯一識別碼 */
+  id: string;
+
+  /** 區塊邊界框 */
+  bbox: { x: number; y: number; width: number; height: number };
+
+  /** 偵測到的文字內容 */
+  text: string;
+
+  /** OCR 信心度 (0-1) */
+  confidence: number;
+
+  /** 估計字體大小 (px) */
+  estimatedFontSize: number;
+
+  /** 估計文字顏色 (hex) */
+  estimatedColor: string;
+
+  /** 文字方向 */
+  direction: 'horizontal' | 'vertical';
+
+  /** 區塊狀態: translate=翻譯, keep=保留原文, exclude=排除 */
+  status: 'translate' | 'keep' | 'exclude';
+}
+
+/**
+ * 版面群組
+ * 具有相似版面的圖片群組
+ */
+export interface LayoutGroup {
+  /** 唯一識別碼 */
+  id: string;
+
+  /** 代表性圖片 ID (用於顯示群組縮圖) */
+  representativeImageId: string;
+
+  /** 群組內所有圖片 ID */
+  imageIds: string[];
+
+  /** 群組內圖片的版面相似度 (0-1) */
+  similarity: number;
+}
 
 /**
  * 單張圖片的完整資料
@@ -107,6 +164,19 @@ export interface ImageData {
 
   /** 該圖片專屬的靜態文字 (浮水印/Logo) */
   staticTexts?: StaticText[];
+
+  // Smart Mode 屬性
+  /** 偵測到的文字區塊 */
+  detectedBlocks?: TextBlock[];
+
+  /** 區塊翻譯結果，key 為 TextBlock.id */
+  blockTranslations?: Record<string, string>;
+
+  /** 移除文字後的圖片 (base64) */
+  inpaintedImage?: string;
+
+  /** 所屬版面群組 ID */
+  layoutGroupId?: string;
 }
 
 // ============================================
