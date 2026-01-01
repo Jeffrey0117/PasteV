@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { ImageData, TextBlock, LayoutGroup } from '../../types';
 import { createImageData } from '../../types';
 import { groupImagesByLayout } from '../../utils/layoutSimilarity';
@@ -22,6 +22,7 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
   const [detectProgress, setDetectProgress] = useState({ current: 0, total: 0 });
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDetection, setPendingDetection] = useState(false);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,10 +55,10 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
 
     if (newImages.length > 0) {
       setImages((prev) => [...prev, ...newImages]);
-      // Start detection automatically
-      startDetection([...images, ...newImages]);
+      // Trigger detection via useEffect
+      setPendingDetection(true);
     }
-  }, [images]);
+  }, []);
 
   // Convert file to base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -85,7 +86,7 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
   };
 
   // Start block detection for all images
-  const startDetection = async (imagesToDetect: ImageData[]) => {
+  const startDetection = useCallback(async (imagesToDetect: ImageData[]) => {
     const pendingImages = imagesToDetect.filter(
       (img) => img.status === 'pending' || !img.detectedBlocks
     );
@@ -152,7 +153,15 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
       setLayoutGroups(groups);
       return currentImages;
     });
-  };
+  }, []);
+
+  // Auto-start detection when pendingDetection is set and images are ready
+  useEffect(() => {
+    if (pendingDetection && images.length > 0 && !isDetecting) {
+      setPendingDetection(false);
+      startDetection(images);
+    }
+  }, [pendingDetection, images, isDetecting, startDetection]);
 
   // Handle drop zone events
   const handleDragOver = useCallback((e: React.DragEvent) => {
