@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
-import type { ImageData, FieldTemplate, CanvasSettings, StaticText, SavedTemplate } from '../../types';
+import type { ImageData, FieldTemplate, CanvasSettings, StaticText, SavedTemplate, SavedProject } from '../../types';
 import ExportButton from './ExportButton';
 import './Preview.css';
 
@@ -344,6 +344,74 @@ const Preview: React.FC<PreviewProps> = ({
     // Reset input so same file can be loaded again
     e.target.value = '';
   }, [onFieldsChange, onCanvasSettingsChange, fields]);
+
+  // Save project to file (includes all images and their data)
+  const saveProject = useCallback(() => {
+    const project: SavedProject = {
+      name: 'PasteV Project',
+      savedAt: new Date().toISOString(),
+      version: '1.0',
+      images: images,
+      fieldTemplates: fields,
+      canvasSettings: canvasSettings,
+    };
+
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pastev-project-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [images, fields, canvasSettings]);
+
+  // Load project from file
+  const loadProject = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const project = JSON.parse(ev.target?.result as string) as SavedProject;
+
+        // Validate project structure
+        if (!project.images || !project.fieldTemplates || !project.canvasSettings) {
+          alert('Invalid project file format');
+          return;
+        }
+
+        // Apply images
+        if (onImagesChange) {
+          onImagesChange(project.images);
+        }
+
+        // Apply field templates
+        if (onFieldsChange) {
+          onFieldsChange(project.fieldTemplates);
+        }
+
+        // Apply canvas settings
+        if (onCanvasSettingsChange) {
+          onCanvasSettingsChange(project.canvasSettings);
+        }
+
+        // Reset to first image
+        onIndexChange(0);
+
+        alert(`Project loaded: ${project.name || 'Unnamed'} (${project.images.length} images)`);
+      } catch (err) {
+        alert('Failed to parse project file');
+        console.error('Project load error:', err);
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset input so same file can be loaded again
+    e.target.value = '';
+  }, [onImagesChange, onFieldsChange, onCanvasSettingsChange, onIndexChange]);
 
   // Get canvas position from mouse event
   const getCanvasPos = useCallback((e: React.MouseEvent | MouseEvent) => {
@@ -1028,6 +1096,25 @@ const Preview: React.FC<PreviewProps> = ({
                     style={{ display: 'none' }}
                   />
                 </label>
+              </div>
+
+              {/* Save/Load Project */}
+              <div className="project-actions">
+                <span className="project-actions-label">Project</span>
+                <div className="project-actions-buttons">
+                  <button className="btn-project-action save" onClick={saveProject} title="Save entire project with all images">
+                    Save Project
+                  </button>
+                  <label className="btn-project-action load" title="Load project from file">
+                    Load Project
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={loadProject}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           )}

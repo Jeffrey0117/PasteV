@@ -149,6 +149,25 @@ export interface SavedTemplate {
 }
 
 /**
+ * 儲存的完整專案
+ * 包含所有圖片資料、欄位模板、畫布設定
+ */
+export interface SavedProject {
+  /** 專案名稱 */
+  name: string;
+  /** 儲存時間 */
+  savedAt: string;
+  /** 版本號 */
+  version: string;
+  /** 所有圖片資料 (包含欄位內容) */
+  images: ImageData[];
+  /** 欄位模板 */
+  fieldTemplates: FieldTemplate[];
+  /** 畫布設定 */
+  canvasSettings: CanvasSettings;
+}
+
+/**
  * 靜態文字 (浮水印/Logo)
  * 會顯示在所有圖片上的固定文字
  */
