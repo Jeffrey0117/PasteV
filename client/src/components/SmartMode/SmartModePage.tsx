@@ -218,6 +218,16 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
 
   return (
     <div className="smart-mode-page">
+      {/* Hidden file input - shared across all upload triggers */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleInputChange}
+        style={{ display: 'none' }}
+      />
+
       {/* Header */}
       <div className="smart-mode-header">
         <div className="smart-mode-header-left">
@@ -258,14 +268,6 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
               <div className="dropzone-icon">+</div>
               <p>拖放圖片或點擊選擇</p>
               <span className="dropzone-hint">支援多張圖片</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleInputChange}
-                style={{ display: 'none' }}
-              />
             </div>
           ) : (
             // Image grid
@@ -291,14 +293,6 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
                 onDrop={handleDrop}
               >
                 <span>+</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleInputChange}
-                  style={{ display: 'none' }}
-                />
               </div>
             </div>
           )}
