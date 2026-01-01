@@ -39,8 +39,29 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Backend health check
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000)
+        });
+        setBackendStatus(response.ok ? 'online' : 'offline');
+      } catch {
+        setBackendStatus('offline');
+      }
+    };
+
+    checkBackend();
+    // Check every 30 seconds
+    const interval = setInterval(checkBackend, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // localStorage key
   const STORAGE_KEY = 'pastev_v2_session';
@@ -447,6 +468,13 @@ function App() {
         <div className="error">
           {error}
           <button onClick={() => setError(null)}>✕</button>
+        </div>
+      )}
+
+      {backendStatus === 'offline' && (
+        <div className="backend-warning">
+          <span>⚠️ 後端服務未啟動</span>
+          <span className="backend-hint">請在根目錄執行 <code>npm run dev</code> 同時啟動前後端</span>
         </div>
       )}
 
