@@ -417,12 +417,15 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-content">
-          <div>
-            <h1>PasteV</h1>
-            <p>
-              圖片文案翻譯工具{' '}
-              {images.length > 0 && `(${images.length} 張圖片)`}
-            </p>
+          <div className="header-brand">
+            <img src="/logo.png" alt="PasteV" className="header-logo" />
+            <div>
+              <h1>PasteV</h1>
+              <p>
+                圖片文案翻譯工具{' '}
+                {images.length > 0 && `(${images.length} 張圖片)`}
+              </p>
+            </div>
           </div>
           {currentStep !== 'upload' && currentStep !== 'smart' && (
             <button onClick={reset} className="btn secondary">

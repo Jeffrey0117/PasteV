@@ -245,6 +245,7 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
               ← 返回
             </button>
           )}
+          <img src="/logo.png" alt="PasteV" className="smart-mode-logo" />
           <h1>Smart Mode - 智慧翻譯</h1>
         </div>
         {images.length > 0 && (

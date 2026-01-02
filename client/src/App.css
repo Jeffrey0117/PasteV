@@ -87,6 +87,18 @@ body {
   align-items: center;
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
 /* Step Indicator */
 .step-indicator {
   display: flex;

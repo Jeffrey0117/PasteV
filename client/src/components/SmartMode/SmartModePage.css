@@ -41,6 +41,12 @@
   background-clip: text;
 }
 
+.smart-mode-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
 .btn-back {
   display: inline-flex;
   align-items: center;
