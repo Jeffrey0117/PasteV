@@ -1,0 +1,653 @@
+/* ============================================
+   SmartMode TableEditor Styles
+   ============================================ */
+
+.sm-table-editor {
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ==================== */
+/* Field Tabs           */
+/* ==================== */
+
+.sm-field-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.sm-field-tab {
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.sm-field-tab:hover {
+  background: var(--border-light);
+  color: var(--text);
+}
+
+.sm-field-tab:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.sm-field-tab.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.sm-field-tabs-empty {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* ==================== */
+/* Table Editor Header  */
+/* ==================== */
+
+.sm-table-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sm-field-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sm-field-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.sm-field-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sm-untranslated-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--warning-light);
+  color: var(--warning);
+  border: 1px solid #fde68a;
+}
+
+.sm-translate-field-btn {
+  flex-shrink: 0;
+}
+
+/* ==================== */
+/* Table Container      */
+/* ==================== */
+
+.sm-table-container {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+/* ==================== */
+/* Data Table           */
+/* ==================== */
+
+.sm-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.sm-data-table th,
+.sm-data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+  vertical-align: top;
+}
+
+.sm-data-table th {
+  background: var(--surface-alt);
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.sm-data-table tbody tr:hover {
+  background: var(--surface-alt);
+}
+
+.sm-data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Column widths */
+.sm-thumbnail-header {
+  width: 100px;
+}
+
+.sm-content-header {
+  width: calc((100% - 100px) / 2);
+}
+
+/* ==================== */
+/* Thumbnail Cell       */
+/* ==================== */
+
+.sm-thumbnail-cell {
+  width: 100px;
+  padding: 8px 12px;
+}
+
+.sm-thumbnail-wrapper {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.sm-thumbnail-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sm-thumbnail-number {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ==================== */
+/* Content Cell         */
+/* ==================== */
+
+.sm-content-cell {
+  padding: 8px 12px;
+}
+
+/* ==================== */
+/* Editable Cell        */
+/* ==================== */
+
+.sm-editable-cell {
+  padding: 8px;
+  border-radius: 6px;
+  cursor: text;
+  min-height: 48px;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.sm-editable-cell:hover {
+  background: var(--surface-alt);
+  border-color: var(--border);
+}
+
+.sm-editable-cell.editing {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.sm-editable-cell textarea {
+  width: 100%;
+  border: none;
+  background: transparent;
+  resize: none;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  line-height: 1.5;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  overflow: hidden;
+}
+
+.sm-editable-cell textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.sm-cell-display {
+  font-size: 0.875rem;
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sm-cell-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ==================== */
+/* Empty Row            */
+/* ==================== */
+
+.sm-empty-row {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 32px 16px !important;
+}
+
+/* ==================== */
+/* Table Editor Footer  */
+/* ==================== */
+
+.sm-table-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--surface-alt);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sm-translate-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sm-keyboard-hints {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sm-keyboard-hints .sm-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.sm-keyboard-hints .sm-hint::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ==================== */
+/* Small Spinner        */
+/* ==================== */
+
+.sm-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: sm-spin 0.8s linear infinite;
+}
+
+@keyframes sm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==================== */
+/* Responsive           */
+/* ==================== */
+
+@media (max-width: 768px) {
+  .sm-table-editor-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sm-translate-field-btn {
+    width: 100%;
+  }
+
+  .sm-table-editor-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sm-translate-all-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sm-keyboard-hints {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .sm-data-table {
+    table-layout: auto;
+  }
+
+  .sm-thumbnail-header {
+    width: 80px;
+  }
+
+  .sm-thumbnail-cell {
+    width: 80px;
+    padding: 8px;
+  }
+
+  .sm-thumbnail-wrapper {
+    width: 56px;
+    height: 56px;
+  }
+
+  .sm-content-cell {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sm-field-tabs {
+    padding: 8px 12px;
+  }
+
+  .sm-field-tab {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  .sm-data-table th,
+  .sm-data-table td {
+    padding: 8px;
+  }
+
+  .sm-editable-cell {
+    padding: 6px;
+    min-height: 40px;
+  }
+
+  .sm-keyboard-hints {
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+}
+
+/* ==================== */
+/* Batch Actions Bar    */
+/* ==================== */
+
+.sm-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--primary-light);
+  border-bottom: 1px solid var(--primary);
+}
+
+.sm-batch-actions-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.sm-batch-actions-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* ==================== */
+/* Row Selection        */
+/* ==================== */
+
+.sm-data-table tbody tr.selected {
+  background: var(--primary-light);
+}
+
+.sm-data-table tbody tr.selected:hover {
+  background: var(--primary-light);
+}
+
+/* ==================== */
+/* Status Indicators    */
+/* ==================== */
+
+.sm-cell-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.sm-cell-status.pending {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.sm-cell-status.translated {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.sm-cell-status.error {
+  background: var(--error-light);
+  color: var(--error);
+}
+
+/* ==================== */
+/* Loading Overlay      */
+/* ==================== */
+
+.sm-table-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 100;
+}
+
+.sm-table-loading-overlay .sm-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: sm-spin 0.8s linear infinite;
+}
+
+.sm-table-loading-overlay p {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ==================== */
+/* Action Buttons       */
+/* ==================== */
+
+.sm-table-editor .btn {
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.sm-table-editor .btn.primary {
+  background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+}
+
+.sm-table-editor .btn.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(99, 102, 241, 0.4);
+}
+
+.sm-table-editor .btn.primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sm-table-editor .btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.sm-table-editor .btn.secondary:hover:not(:disabled) {
+  background: var(--surface-alt);
+  border-color: var(--text-muted);
+}
+
+.sm-table-editor .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ==================== */
+/* Tooltip              */
+/* ==================== */
+
+.sm-tooltip {
+  position: absolute;
+  background: var(--text);
+  color: white;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.sm-tooltip.visible {
+  opacity: 1;
+}
+
+.sm-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--text);
+}
+
+/* ==================== */
+/* Scrollbar Styling    */
+/* ==================== */
+
+.sm-table-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sm-table-container::-webkit-scrollbar-track {
+  background: var(--surface-alt);
+  border-radius: 4px;
+}
+
+.sm-table-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.sm-table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ==================== */
+/* Focus States         */
+/* ==================== */
+
+.sm-table-editor *:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.sm-table-editor button:focus-visible {
+  outline-offset: 2px;
+}
+
+/* ==================== */
+/* Transition Effects   */
+/* ==================== */
+
+.sm-data-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.sm-thumbnail-wrapper {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sm-thumbnail-wrapper:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow);
+}

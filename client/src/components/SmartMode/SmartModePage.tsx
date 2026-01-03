@@ -1,9 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { ImageData, TextBlock, LayoutGroup } from '../../types';
-import { createImageData } from '../../types';
+import type { ImageData, TextBlock, LayoutGroup, FieldTemplate, FieldContent } from '../../types';
+import { createImageData, createDefaultField, generateId } from '../../types';
 import { groupImagesByLayout } from '../../utils/layoutSimilarity';
 import { BlockEditor } from './BlockEditor';
 import './SmartModePage.css';
+
+/** Smart Mode 步驟 */
+type SmartStep = 'upload' | 'detect' | 'fields' | 'edit' | 'translate' | 'preview';
 
 interface SmartModePageProps {
   onBack?: () => void;
@@ -14,6 +17,9 @@ interface SmartModePageProps {
  * Handles image upload, block detection, layout grouping, and block editing
  */
 export function SmartModePage({ onBack }: SmartModePageProps) {
+  // Step management
+  const [currentStep, setCurrentStep] = useState<SmartStep>('upload');
+
   // State management
   const [images, setImages] = useState<ImageData[]>([]);
   const [layoutGroups, setLayoutGroups] = useState<LayoutGroup[]>([]);
@@ -23,6 +29,16 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingDetection, setPendingDetection] = useState(false);
+
+  // Field templates for parsing
+  const [fieldTemplates, setFieldTemplates] = useState<FieldTemplate[]>([
+    createDefaultField('帳號', 0),
+    createDefaultField('ID', 1),
+  ]);
+
+  // Processing states
+  const [isParsing, setIsParsing] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -180,6 +196,16 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
     }
   }, [isDetecting, images, startDetection]);
 
+  // Auto-select first detected image if none selected
+  useEffect(() => {
+    if (!selectedImageId && images.length > 0) {
+      const detectedImage = images.find(img => img.status === 'detected' && img.detectedBlocks);
+      if (detectedImage) {
+        setSelectedImageId(detectedImage.id);
+      }
+    }
+  }, [selectedImageId, images]);
+
   // Handle drop zone events
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -235,12 +261,207 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
     setSelectedImageId(null);
     setSelectedBlockId(null);
     setError(null);
+    setCurrentStep('upload');
   }, []);
+
+  // Add field template
+  const handleAddField = useCallback(() => {
+    const newField = createDefaultField(`欄位 ${fieldTemplates.length + 1}`, fieldTemplates.length);
+    setFieldTemplates(prev => [...prev, newField]);
+  }, [fieldTemplates.length]);
+
+  // Remove field template
+  const handleRemoveField = useCallback((fieldId: string) => {
+    setFieldTemplates(prev => prev.filter(f => f.id !== fieldId));
+  }, []);
+
+  // Update field template
+  const handleUpdateField = useCallback((fieldId: string, updates: Partial<FieldTemplate>) => {
+    setFieldTemplates(prev => prev.map(f => f.id === fieldId ? { ...f, ...updates } : f));
+  }, []);
+
+  // AI Parse - 批次解析所有圖片
+  const handleAIParse = useCallback(async () => {
+    if (images.length === 0 || fieldTemplates.length === 0) return;
+
+    setIsParsing(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/ai-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: fieldTemplates.map(f => ({ id: f.id, name: f.name })),
+          images: images.map(img => ({
+            id: img.id,
+            image: img.originalImage,
+            ocrText: img.detectedBlocks?.map(b => b.text).join('\n') || '',
+          })),
+        }),
+      });
+
+      if (!response.ok) throw new Error('AI 解析失敗');
+
+      const result = await response.json();
+
+      // Update images with parsed fields
+      setImages(prev => prev.map(img => {
+        const parsedFields = result.results?.[img.id];
+        if (!parsedFields) return img;
+
+        const fields: Record<string, FieldContent> = {};
+        for (const [fieldId, text] of Object.entries(parsedFields)) {
+          fields[fieldId] = { original: text as string, translated: '' };
+        }
+
+        return { ...img, fields, status: 'parsed' };
+      }));
+
+      setCurrentStep('edit');
+    } catch (err) {
+      console.error('AI Parse error:', err);
+      setError(err instanceof Error ? err.message : 'AI 解析失敗');
+    } finally {
+      setIsParsing(false);
+    }
+  }, [images, fieldTemplates]);
+
+  // AI Translate - 批次翻譯所有欄位
+  const handleAITranslate = useCallback(async () => {
+    const textsToTranslate: Array<{ key: string; text: string }> = [];
+
+    images.forEach(img => {
+      Object.entries(img.fields || {}).forEach(([fieldId, content]) => {
+        if (content.original && !content.translated) {
+          textsToTranslate.push({
+            key: `${img.id}:${fieldId}`,
+            text: content.original,
+          });
+        }
+      });
+    });
+
+    if (textsToTranslate.length === 0) {
+      setCurrentStep('preview');
+      return;
+    }
+
+    setIsTranslating(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/translate-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts: textsToTranslate }),
+      });
+
+      if (!response.ok) throw new Error('翻譯失敗');
+
+      const result = await response.json();
+
+      // Update images with translations
+      setImages(prev => prev.map(img => {
+        const updatedFields = { ...img.fields };
+        Object.keys(updatedFields).forEach(fieldId => {
+          const key = `${img.id}:${fieldId}`;
+          if (result.translations?.[key]) {
+            updatedFields[fieldId] = {
+              ...updatedFields[fieldId],
+              translated: result.translations[key],
+            };
+          }
+        });
+        return { ...img, fields: updatedFields, status: 'translated' };
+      }));
+
+      setCurrentStep('preview');
+    } catch (err) {
+      console.error('Translate error:', err);
+      setError(err instanceof Error ? err.message : '翻譯失敗');
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [images]);
+
+  // Step navigation
+  const canGoNext = useCallback(() => {
+    switch (currentStep) {
+      case 'upload':
+        return images.length > 0;
+      case 'detect':
+        return images.every(img => img.status === 'detected');
+      case 'fields':
+        return fieldTemplates.length > 0;
+      case 'edit':
+        return images.some(img => Object.keys(img.fields || {}).length > 0);
+      case 'translate':
+        return images.some(img =>
+          Object.values(img.fields || {}).some(f => f.translated)
+        );
+      default:
+        return false;
+    }
+  }, [currentStep, images, fieldTemplates]);
+
+  const handleNextStep = useCallback(() => {
+    switch (currentStep) {
+      case 'upload':
+        setCurrentStep('detect');
+        break;
+      case 'detect':
+        setCurrentStep('fields');
+        break;
+      case 'fields':
+        handleAIParse();
+        break;
+      case 'edit':
+        handleAITranslate();
+        break;
+      case 'translate':
+        setCurrentStep('preview');
+        break;
+    }
+  }, [currentStep, handleAIParse, handleAITranslate]);
+
+  const handlePrevStep = useCallback(() => {
+    switch (currentStep) {
+      case 'detect':
+        setCurrentStep('upload');
+        break;
+      case 'fields':
+        setCurrentStep('detect');
+        break;
+      case 'edit':
+        setCurrentStep('fields');
+        break;
+      case 'translate':
+        setCurrentStep('edit');
+        break;
+      case 'preview':
+        setCurrentStep('translate');
+        break;
+    }
+  }, [currentStep]);
 
   // Get image src with data URL prefix
   const getImageSrc = (base64: string): string => {
     return base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
   };
+
+  // Step labels
+  const stepLabels: Record<SmartStep, string> = {
+    upload: '上傳',
+    detect: '偵測',
+    fields: '欄位',
+    edit: '編輯',
+    translate: '翻譯',
+    preview: '預覽',
+  };
+
+  const steps: SmartStep[] = ['upload', 'detect', 'fields', 'edit', 'translate', 'preview'];
+  const currentStepIndex = steps.indexOf(currentStep);
 
   return (
     <div className="smart-mode-page">
@@ -265,11 +486,26 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
           <img src="/logo.png" alt="PasteV" className="smart-mode-logo" />
           <h1>Smart Mode - 智慧翻譯</h1>
         </div>
-        {images.length > 0 && (
-          <button className="btn-clear" onClick={handleClearAll}>
-            清除全部
-          </button>
-        )}
+        <div className="smart-mode-header-right">
+          {images.length > 0 && (
+            <button className="btn-clear" onClick={handleClearAll}>
+              清除全部
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Step indicator */}
+      <div className="smart-mode-steps">
+        {steps.map((step, index) => (
+          <div
+            key={step}
+            className={`step-item ${currentStep === step ? 'active' : ''} ${index < currentStepIndex ? 'completed' : ''}`}
+          >
+            <div className="step-number">{index + 1}</div>
+            <span className="step-label">{stepLabels[step]}</span>
+          </div>
+        ))}
       </div>
 
       {/* Error message */}
@@ -380,8 +616,8 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
           </div>
         )}
 
-        {/* Block Editor for selected image */}
-        {selectedImage && selectedImage.detectedBlocks && (
+        {/* Block Editor for selected image (detect step) */}
+        {(currentStep === 'upload' || currentStep === 'detect') && selectedImage && selectedImage.detectedBlocks && (
           <div className="smart-mode-editor">
             <BlockEditor
               image={selectedImage}
@@ -392,7 +628,135 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
             />
           </div>
         )}
+
+        {/* Field Definition (fields step) */}
+        {currentStep === 'fields' && (
+          <div className="smart-mode-fields">
+            <h3>定義欄位</h3>
+            <p className="fields-hint">定義要從圖片中提取的欄位（如：帳號、ID、粉絲數等）</p>
+            <div className="fields-list">
+              {fieldTemplates.map((field, index) => (
+                <div key={field.id} className="field-item">
+                  <span className="field-index">{index + 1}</span>
+                  <input
+                    type="text"
+                    value={field.name}
+                    onChange={(e) => handleUpdateField(field.id, { name: e.target.value })}
+                    placeholder="欄位名稱"
+                    className="field-name-input"
+                  />
+                  <button
+                    className="btn-remove-field"
+                    onClick={() => handleRemoveField(field.id)}
+                    disabled={fieldTemplates.length <= 1}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button className="btn-add-field" onClick={handleAddField}>
+              + 新增欄位
+            </button>
+          </div>
+        )}
+
+        {/* Table Editor (edit step) */}
+        {currentStep === 'edit' && (
+          <div className="smart-mode-table">
+            <h3>編輯資料</h3>
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>圖片</th>
+                    {fieldTemplates.map(field => (
+                      <th key={field.id}>{field.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {images.map((img, imgIndex) => (
+                    <tr key={img.id}>
+                      <td className="img-cell">
+                        <img src={getImageSrc(img.originalImage)} alt={`Image ${imgIndex + 1}`} />
+                        <span>{imgIndex + 1}</span>
+                      </td>
+                      {fieldTemplates.map(field => (
+                        <td key={field.id}>
+                          <input
+                            type="text"
+                            value={img.fields?.[field.id]?.original || ''}
+                            onChange={(e) => {
+                              const newFields = { ...img.fields };
+                              newFields[field.id] = {
+                                original: e.target.value,
+                                translated: newFields[field.id]?.translated || '',
+                              };
+                              setImages(prev => prev.map(i =>
+                                i.id === img.id ? { ...i, fields: newFields } : i
+                              ));
+                            }}
+                            placeholder={`輸入${field.name}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Preview (preview step) */}
+        {currentStep === 'preview' && (
+          <div className="smart-mode-preview">
+            <h3>預覽結果</h3>
+            <div className="preview-grid">
+              {images.map((img, index) => (
+                <div key={img.id} className="preview-card">
+                  <div className="preview-image">
+                    <img src={getImageSrc(img.originalImage)} alt={`Preview ${index + 1}`} />
+                  </div>
+                  <div className="preview-fields">
+                    {fieldTemplates.map(field => (
+                      <div key={field.id} className="preview-field">
+                        <span className="preview-field-name">{field.name}:</span>
+                        <span className="preview-field-original">{img.fields?.[field.id]?.original || '-'}</span>
+                        <span className="preview-field-translated">{img.fields?.[field.id]?.translated || '-'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="preview-actions">
+              <button className="btn-export">下載全部</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Bottom navigation */}
+      {images.length > 0 && (
+        <div className="smart-mode-nav">
+          <button
+            className="btn-prev"
+            onClick={handlePrevStep}
+            disabled={currentStep === 'upload'}
+          >
+            ← 上一步
+          </button>
+          <button
+            className="btn-next"
+            onClick={handleNextStep}
+            disabled={!canGoNext() || isParsing || isTranslating || isDetecting}
+          >
+            {isParsing ? '解析中...' : isTranslating ? '翻譯中...' : currentStep === 'preview' ? '完成' : '下一步 →'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
