@@ -163,6 +163,16 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
     }
   }, [pendingDetection, images, isDetecting, startDetection]);
 
+  // Re-trigger detection after current detection finishes if there are pending images
+  useEffect(() => {
+    if (!isDetecting && images.length > 0) {
+      const hasPendingImages = images.some(img => img.status === 'pending');
+      if (hasPendingImages) {
+        startDetection(images);
+      }
+    }
+  }, [isDetecting, images, startDetection]);
+
   // Handle drop zone events
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
