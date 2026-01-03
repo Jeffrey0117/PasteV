@@ -34,27 +34,34 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    setError(null);
-    const newImages: ImageData[] = [];
+    // Convert FileList to Array immediately to avoid issues with FileList being modified
+    const fileArray = Array.from(files);
 
-    // Process each file
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.type.startsWith('image/')) continue;
+    setError(null);
+
+    // Process each file using Promise.all for better reliability
+    const processPromises = fileArray.map(async (file) => {
+      if (!file.type.startsWith('image/')) {
+        return null;
+      }
 
       try {
         const base64 = await fileToBase64(file);
         const dimensions = await getImageDimensions(base64);
         const imageData = createImageData(base64, dimensions.width, dimensions.height);
         imageData.status = 'pending';
-        newImages.push(imageData);
+        return imageData;
       } catch (err) {
-        console.error('Failed to process image:', err);
+        console.error('Failed to process image:', file.name, err);
+        return null;
       }
-    }
+    });
 
-    if (newImages.length > 0) {
-      setImages((prev) => [...prev, ...newImages]);
+    const results = await Promise.all(processPromises);
+    const validImages = results.filter((img): img is ImageData => img !== null);
+
+    if (validImages.length > 0) {
+      setImages((prev) => [...prev, ...validImages]);
       // Trigger detection via useEffect
       setPendingDetection(true);
     }
