@@ -1,65 +1,152 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { ImageData, TextBlock, LayoutGroup, FieldTemplate, FieldContent } from '../../types';
+import type { ImageData, FieldTemplate, FieldContent } from '../../types';
 import { createImageData, createDefaultField, generateId } from '../../types';
-import { groupImagesByLayout } from '../../utils/layoutSimilarity';
-import { BlockEditor } from './BlockEditor';
 import './SmartModePage.css';
 
-/** Smart Mode 步驟 */
-type SmartStep = 'upload' | 'detect' | 'fields' | 'edit' | 'translate' | 'preview';
+/** Smart Mode 4 步驟 */
+type SmartStep = 'upload' | 'fields' | 'edit' | 'preview';
 
 interface SmartModePageProps {
   onBack?: () => void;
 }
 
 /**
- * SmartModePage - Smart Mode main page component
- * Handles image upload, block detection, layout grouping, and block editing
+ * SmartModePage - Smart Mode 主頁面
+ * 4 步流程：上傳 -> 欄位定義 -> 編輯 -> 預覽
  */
 export function SmartModePage({ onBack }: SmartModePageProps) {
-  // Step management
+  // 步驟管理
   const [currentStep, setCurrentStep] = useState<SmartStep>('upload');
 
-  // State management
+  // 圖片與 OCR 狀態
   const [images, setImages] = useState<ImageData[]>([]);
-  const [layoutGroups, setLayoutGroups] = useState<LayoutGroup[]>([]);
-  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [detectProgress, setDetectProgress] = useState({ current: 0, total: 0 });
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingDetection, setPendingDetection] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState({ completed: 0, total: 0 });
+  const [isOcrRunning, setIsOcrRunning] = useState(false);
 
-  // Field templates for parsing
+  // 欄位模板
   const [fieldTemplates, setFieldTemplates] = useState<FieldTemplate[]>([
     createDefaultField('帳號', 0),
     createDefaultField('ID', 1),
   ]);
 
-  // Processing states
-  const [isParsing, setIsParsing] = useState(false);
+  // 編輯步驟狀態
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [translateTarget, setTranslateTarget] = useState<'field' | 'all' | null>(null);
+
+  // 解析狀態
+  const [isParsing, setIsParsing] = useState(false);
+
+  // 預覽步驟狀態
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [showTranslated, setShowTranslated] = useState(true);
+
+  // 錯誤訊息
+  const [error, setError] = useState<string | null>(null);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get selected image data
-  const selectedImage = images.find((img) => img.id === selectedImageId) || null;
+  // 初始化 activeTab
+  useEffect(() => {
+    if (fieldTemplates.length > 0 && !activeTab) {
+      setActiveTab(fieldTemplates[0].id);
+    }
+  }, [fieldTemplates, activeTab]);
 
-  // Handle file selection
+  // ============================================
+  // 檔案處理
+  // ============================================
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = reject;
+      img.src = `data:image/png;base64,${base64}`;
+    });
+  };
+
+  const getImageSrc = (base64: string): string => {
+    return base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+  };
+
+  // ============================================
+  // 背景 OCR
+  // ============================================
+
+  const runOcrForImage = useCallback(async (imageId: string, imageBase64: string) => {
+    try {
+      setImages(prev => prev.map(img =>
+        img.id === imageId ? { ...img, status: 'ocr' } : img
+      ));
+
+      const response = await fetch('/api/detect-blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageBase64 }),
+      });
+
+      if (!response.ok) throw new Error('OCR 失敗');
+
+      const result = await response.json();
+      const ocrText = result.blocks?.map((b: { text: string }) => b.text).join('\n') || '';
+
+      setImages(prev => prev.map(img =>
+        img.id === imageId
+          ? { ...img, ocrText, detectedBlocks: result.blocks, status: 'ocr_done' }
+          : img
+      ));
+
+      setOcrProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
+    } catch (err) {
+      console.error('OCR error for image:', imageId, err);
+      setImages(prev => prev.map(img =>
+        img.id === imageId ? { ...img, status: 'error' } : img
+      ));
+      setOcrProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
+    }
+  }, []);
+
+  const startBackgroundOcr = useCallback(async (newImages: ImageData[]) => {
+    if (newImages.length === 0) return;
+
+    setIsOcrRunning(true);
+    setOcrProgress({ completed: 0, total: newImages.length });
+
+    // 逐一執行 OCR（可改為並行但需控制併發數）
+    for (const img of newImages) {
+      await runOcrForImage(img.id, img.originalImage);
+    }
+
+    setIsOcrRunning(false);
+  }, [runOcrForImage]);
+
+  // ============================================
+  // 檔案上傳
+  // ============================================
+
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    // Convert FileList to Array immediately to avoid issues with FileList being modified
     const fileArray = Array.from(files);
-
     setError(null);
 
-    // Process each file using Promise.all for better reliability
     const processPromises = fileArray.map(async (file) => {
-      if (!file.type.startsWith('image/')) {
-        return null;
-      }
+      if (!file.type.startsWith('image/')) return null;
 
       try {
         const base64 = await fileToBase64(file);
@@ -77,136 +164,15 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
     const validImages = results.filter((img): img is ImageData => img !== null);
 
     if (validImages.length > 0) {
-      setImages((prev) => [...prev, ...validImages]);
-      // Trigger detection via useEffect
-      setPendingDetection(true);
+      setImages(prev => {
+        const updated = [...prev, ...validImages];
+        // 啟動背景 OCR
+        startBackgroundOcr(validImages);
+        return updated;
+      });
     }
-  }, []);
+  }, [startBackgroundOcr]);
 
-  // Convert file to base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove data URL prefix
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // Get image dimensions
-  const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve({ width: img.width, height: img.height });
-      img.onerror = reject;
-      img.src = `data:image/png;base64,${base64}`;
-    });
-  };
-
-  // Start block detection for all images
-  const startDetection = useCallback(async (imagesToDetect: ImageData[]) => {
-    const pendingImages = imagesToDetect.filter(
-      (img) => img.status === 'pending' || !img.detectedBlocks
-    );
-
-    if (pendingImages.length === 0) return;
-
-    setIsDetecting(true);
-    setDetectProgress({ current: 0, total: pendingImages.length });
-
-    for (let i = 0; i < pendingImages.length; i++) {
-      const image = pendingImages[i];
-      setDetectProgress({ current: i, total: pendingImages.length });
-
-      try {
-        // Update status to detecting
-        setImages((prev) =>
-          prev.map((img) =>
-            img.id === image.id ? { ...img, status: 'detecting' } : img
-          )
-        );
-
-        // Call API to detect blocks
-        const response = await fetch('/api/detect-blocks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            image: image.originalImage,
-            width: image.width,
-            height: image.height,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Detection failed: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        const blocks: TextBlock[] = result.blocks || [];
-
-        // Update image with detected blocks
-        setImages((prev) =>
-          prev.map((img) =>
-            img.id === image.id
-              ? { ...img, detectedBlocks: blocks, status: 'detected' }
-              : img
-          )
-        );
-      } catch (err) {
-        console.error('Detection error:', err);
-        setImages((prev) =>
-          prev.map((img) =>
-            img.id === image.id ? { ...img, status: 'error' } : img
-          )
-        );
-      }
-    }
-
-    setDetectProgress({ current: pendingImages.length, total: pendingImages.length });
-    setIsDetecting(false);
-
-    // After detection, group images by layout
-    setImages((currentImages) => {
-      const groups = groupImagesByLayout(currentImages);
-      setLayoutGroups(groups);
-      return currentImages;
-    });
-  }, []);
-
-  // Auto-start detection when pendingDetection is set and images are ready
-  useEffect(() => {
-    if (pendingDetection && images.length > 0 && !isDetecting) {
-      setPendingDetection(false);
-      startDetection(images);
-    }
-  }, [pendingDetection, images, isDetecting, startDetection]);
-
-  // Re-trigger detection after current detection finishes if there are pending images
-  useEffect(() => {
-    if (!isDetecting && images.length > 0) {
-      const hasPendingImages = images.some(img => img.status === 'pending');
-      if (hasPendingImages) {
-        startDetection(images);
-      }
-    }
-  }, [isDetecting, images, startDetection]);
-
-  // Auto-select first detected image if none selected
-  useEffect(() => {
-    if (!selectedImageId && images.length > 0) {
-      const detectedImage = images.find(img => img.status === 'detected' && img.detectedBlocks);
-      if (detectedImage) {
-        setSelectedImageId(detectedImage.id);
-      }
-    }
-  }, [selectedImageId, images]);
-
-  // Handle drop zone events
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -224,63 +190,41 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     handleFileSelect(e.target.files);
-    // Reset input value to allow selecting the same file again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   }, [handleFileSelect]);
 
-  // Handle image selection
-  const handleImageSelect = useCallback((imageId: string) => {
-    setSelectedImageId(imageId);
-    setSelectedBlockId(null);
-  }, []);
+  // ============================================
+  // 欄位管理
+  // ============================================
 
-  // Handle block changes
-  const handleBlocksChange = useCallback((blocks: TextBlock[]) => {
-    if (!selectedImageId) return;
-
-    setImages((prev) =>
-      prev.map((img) =>
-        img.id === selectedImageId ? { ...img, detectedBlocks: blocks } : img
-      )
-    );
-  }, [selectedImageId]);
-
-  // Get images in a group
-  const getGroupImages = useCallback((group: LayoutGroup): ImageData[] => {
-    return group.imageIds
-      .map((id) => images.find((img) => img.id === id))
-      .filter((img): img is ImageData => img !== undefined);
-  }, [images]);
-
-  // Clear all images
-  const handleClearAll = useCallback(() => {
-    setImages([]);
-    setLayoutGroups([]);
-    setSelectedImageId(null);
-    setSelectedBlockId(null);
-    setError(null);
-    setCurrentStep('upload');
-  }, []);
-
-  // Add field template
   const handleAddField = useCallback(() => {
     const newField = createDefaultField(`欄位 ${fieldTemplates.length + 1}`, fieldTemplates.length);
     setFieldTemplates(prev => [...prev, newField]);
   }, [fieldTemplates.length]);
 
-  // Remove field template
   const handleRemoveField = useCallback((fieldId: string) => {
-    setFieldTemplates(prev => prev.filter(f => f.id !== fieldId));
-  }, []);
+    setFieldTemplates(prev => {
+      const updated = prev.filter(f => f.id !== fieldId);
+      // 如果刪除的是當前 tab，切換到第一個
+      if (activeTab === fieldId && updated.length > 0) {
+        setActiveTab(updated[0].id);
+      }
+      return updated;
+    });
+  }, [activeTab]);
 
-  // Update field template
   const handleUpdateField = useCallback((fieldId: string, updates: Partial<FieldTemplate>) => {
-    setFieldTemplates(prev => prev.map(f => f.id === fieldId ? { ...f, ...updates } : f));
+    setFieldTemplates(prev => prev.map(f =>
+      f.id === fieldId ? { ...f, ...updates } : f
+    ));
   }, []);
 
-  // AI Parse - 批次解析所有圖片
+  // ============================================
+  // AI 解析
+  // ============================================
+
   const handleAIParse = useCallback(async () => {
     if (images.length === 0 || fieldTemplates.length === 0) return;
 
@@ -296,7 +240,7 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
           images: images.map(img => ({
             id: img.id,
             image: img.originalImage,
-            ocrText: img.detectedBlocks?.map(b => b.text).join('\n') || '',
+            ocrText: img.ocrText || '',
           })),
         }),
       });
@@ -305,7 +249,6 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
 
       const result = await response.json();
 
-      // Update images with parsed fields
       setImages(prev => prev.map(img => {
         const parsedFields = result.results?.[img.id];
         if (!parsedFields) return img;
@@ -318,6 +261,11 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
         return { ...img, fields, status: 'parsed' };
       }));
 
+      // 設定預設 activeTab
+      if (fieldTemplates.length > 0) {
+        setActiveTab(fieldTemplates[0].id);
+      }
+
       setCurrentStep('edit');
     } catch (err) {
       console.error('AI Parse error:', err);
@@ -327,27 +275,27 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
     }
   }, [images, fieldTemplates]);
 
-  // AI Translate - 批次翻譯所有欄位
-  const handleAITranslate = useCallback(async () => {
+  // ============================================
+  // 翻譯功能
+  // ============================================
+
+  const handleTranslateField = useCallback(async (fieldId: string) => {
     const textsToTranslate: Array<{ key: string; text: string }> = [];
 
     images.forEach(img => {
-      Object.entries(img.fields || {}).forEach(([fieldId, content]) => {
-        if (content.original && !content.translated) {
-          textsToTranslate.push({
-            key: `${img.id}:${fieldId}`,
-            text: content.original,
-          });
-        }
-      });
+      const content = img.fields?.[fieldId];
+      if (content?.original && !content.translated) {
+        textsToTranslate.push({
+          key: `${img.id}:${fieldId}`,
+          text: content.original,
+        });
+      }
     });
 
-    if (textsToTranslate.length === 0) {
-      setCurrentStep('preview');
-      return;
-    }
+    if (textsToTranslate.length === 0) return;
 
     setIsTranslating(true);
+    setTranslateTarget('field');
     setError(null);
 
     try {
@@ -361,7 +309,58 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
 
       const result = await response.json();
 
-      // Update images with translations
+      setImages(prev => prev.map(img => {
+        const key = `${img.id}:${fieldId}`;
+        if (result.translations?.[key]) {
+          const updatedFields = { ...img.fields };
+          updatedFields[fieldId] = {
+            ...updatedFields[fieldId],
+            translated: result.translations[key],
+          };
+          return { ...img, fields: updatedFields };
+        }
+        return img;
+      }));
+    } catch (err) {
+      console.error('Translate error:', err);
+      setError(err instanceof Error ? err.message : '翻譯失敗');
+    } finally {
+      setIsTranslating(false);
+      setTranslateTarget(null);
+    }
+  }, [images]);
+
+  const handleTranslateAll = useCallback(async () => {
+    const textsToTranslate: Array<{ key: string; text: string }> = [];
+
+    images.forEach(img => {
+      Object.entries(img.fields || {}).forEach(([fieldId, content]) => {
+        if (content.original && !content.translated) {
+          textsToTranslate.push({
+            key: `${img.id}:${fieldId}`,
+            text: content.original,
+          });
+        }
+      });
+    });
+
+    if (textsToTranslate.length === 0) return;
+
+    setIsTranslating(true);
+    setTranslateTarget('all');
+    setError(null);
+
+    try {
+      const response = await fetch('/api/translate-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts: textsToTranslate }),
+      });
+
+      if (!response.ok) throw new Error('翻譯失敗');
+
+      const result = await response.json();
+
       setImages(prev => prev.map(img => {
         const updatedFields = { ...img.fields };
         Object.keys(updatedFields).forEach(fieldId => {
@@ -375,97 +374,131 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
         });
         return { ...img, fields: updatedFields, status: 'translated' };
       }));
-
-      setCurrentStep('preview');
     } catch (err) {
       console.error('Translate error:', err);
       setError(err instanceof Error ? err.message : '翻譯失敗');
     } finally {
       setIsTranslating(false);
+      setTranslateTarget(null);
     }
   }, [images]);
 
-  // Step navigation
+  // ============================================
+  // 輸出功能
+  // ============================================
+
+  const handleExportSingle = useCallback(async () => {
+    const img = images[previewIndex];
+    if (!img) return;
+
+    // 簡單實作：將資料下載為 JSON（實際應用可改為圖片輸出）
+    const data = {
+      image: img.id,
+      fields: img.fields,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `output-${previewIndex + 1}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [images, previewIndex]);
+
+  const handleExportAll = useCallback(async () => {
+    // 簡單實作：將所有資料下載為 JSON（實際應用可改為 ZIP）
+    const data = images.map((img, index) => ({
+      index: index + 1,
+      image: img.id,
+      fields: img.fields,
+    }));
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `output-all.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [images]);
+
+  // ============================================
+  // 步驟導航
+  // ============================================
+
+  const allOcrCompleted = images.length > 0 && images.every(img =>
+    img.status === 'ocr_done' || img.status === 'parsed' || img.status === 'translated'
+  );
+
   const canGoNext = useCallback(() => {
     switch (currentStep) {
       case 'upload':
-        return images.length > 0;
-      case 'detect':
-        return images.every(img => img.status === 'detected');
+        return images.length > 0 && allOcrCompleted;
       case 'fields':
         return fieldTemplates.length > 0;
       case 'edit':
         return images.some(img => Object.keys(img.fields || {}).length > 0);
-      case 'translate':
-        return images.some(img =>
-          Object.values(img.fields || {}).some(f => f.translated)
-        );
       default:
         return false;
     }
-  }, [currentStep, images, fieldTemplates]);
+  }, [currentStep, images, fieldTemplates, allOcrCompleted]);
 
   const handleNextStep = useCallback(() => {
     switch (currentStep) {
       case 'upload':
-        setCurrentStep('detect');
-        break;
-      case 'detect':
         setCurrentStep('fields');
         break;
       case 'fields':
         handleAIParse();
         break;
       case 'edit':
-        handleAITranslate();
-        break;
-      case 'translate':
+        setPreviewIndex(0);
         setCurrentStep('preview');
         break;
     }
-  }, [currentStep, handleAIParse, handleAITranslate]);
+  }, [currentStep, handleAIParse]);
 
   const handlePrevStep = useCallback(() => {
     switch (currentStep) {
-      case 'detect':
-        setCurrentStep('upload');
-        break;
       case 'fields':
-        setCurrentStep('detect');
+        setCurrentStep('upload');
         break;
       case 'edit':
         setCurrentStep('fields');
         break;
-      case 'translate':
-        setCurrentStep('edit');
-        break;
       case 'preview':
-        setCurrentStep('translate');
+        setCurrentStep('edit');
         break;
     }
   }, [currentStep]);
 
-  // Get image src with data URL prefix
-  const getImageSrc = (base64: string): string => {
-    return base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-  };
+  const handleClearAll = useCallback(() => {
+    setImages([]);
+    setCurrentStep('upload');
+    setOcrProgress({ completed: 0, total: 0 });
+    setError(null);
+    setPreviewIndex(0);
+  }, []);
 
-  // Step labels
+  // ============================================
+  // 步驟設定
+  // ============================================
+
+  const steps: SmartStep[] = ['upload', 'fields', 'edit', 'preview'];
   const stepLabels: Record<SmartStep, string> = {
     upload: '上傳',
-    detect: '偵測',
     fields: '欄位',
     edit: '編輯',
-    translate: '翻譯',
     preview: '預覽',
   };
-
-  const steps: SmartStep[] = ['upload', 'detect', 'fields', 'edit', 'translate', 'preview'];
   const currentStepIndex = steps.indexOf(currentStep);
+
+  // ============================================
+  // 渲染
+  // ============================================
 
   return (
     <div className="smart-mode-page">
-      {/* Hidden file input - shared across all upload triggers */}
+      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -495,15 +528,18 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
         </div>
       </div>
 
-      {/* Step indicator */}
+      {/* Step indicator - 4 步驟 */}
       <div className="smart-mode-steps">
         {steps.map((step, index) => (
           <div
             key={step}
             className={`step-item ${currentStep === step ? 'active' : ''} ${index < currentStepIndex ? 'completed' : ''}`}
           >
-            <div className="step-number">{index + 1}</div>
+            <div className="step-number">
+              {index < currentStepIndex ? '✓' : index + 1}
+            </div>
             <span className="step-label">{stepLabels[step]}</span>
+            {index < steps.length - 1 && <div className="step-connector" />}
           </div>
         ))}
       </div>
@@ -518,265 +554,344 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
 
       {/* Main content */}
       <div className="smart-mode-content">
-        {/* Upload zone / Image grid */}
-        <div className="smart-mode-upload-section">
-          {images.length === 0 ? (
-            // Upload zone
-            <div
-              className="smart-mode-dropzone"
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onClick={handleClick}
-            >
-              <div className="dropzone-icon">+</div>
-              <p>拖放圖片或點擊選擇</p>
-              <span className="dropzone-hint">支援多張圖片</span>
-            </div>
-          ) : (
-            // Image grid
-            <div className="smart-mode-image-grid">
-              {images.map((image, index) => (
-                <div
-                  key={image.id}
-                  className={`image-grid-item ${selectedImageId === image.id ? 'selected' : ''}`}
-                  onClick={() => handleImageSelect(image.id)}
-                >
-                  <img src={getImageSrc(image.originalImage)} alt={`Image ${index + 1}`} />
-                  <div className="image-grid-index">{index + 1}</div>
-                  <div className={`image-grid-status status-${image.status}`}>
-                    {getStatusLabel(image.status)}
-                  </div>
-                </div>
-              ))}
-              {/* Add more button */}
+        {/* ==================== */}
+        {/* Step 1: Upload       */}
+        {/* ==================== */}
+        {currentStep === 'upload' && (
+          <div className="step-upload">
+            {images.length === 0 ? (
               <div
-                className="image-grid-add"
-                onClick={handleClick}
+                className="smart-mode-dropzone"
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
+                onClick={handleClick}
               >
-                <span>+</span>
+                <div className="dropzone-icon">+</div>
+                <p>拖放圖片或點擊選擇</p>
+                <span className="dropzone-hint">支援多張圖片，上傳後自動執行 OCR</span>
+              </div>
+            ) : (
+              <>
+                <div className="smart-mode-image-grid">
+                  {images.map((image, index) => (
+                    <div
+                      key={image.id}
+                      className={`image-grid-item ${image.status === 'ocr' ? 'processing' : ''}`}
+                    >
+                      <img src={getImageSrc(image.originalImage)} alt={`Image ${index + 1}`} />
+                      <div className="image-grid-index">{index + 1}</div>
+                      <div className={`image-grid-status status-${image.status}`}>
+                        {image.status === 'pending' && '等待中'}
+                        {image.status === 'ocr' && '辨識中...'}
+                        {image.status === 'ocr_done' && '✓ 完成'}
+                        {image.status === 'error' && '錯誤'}
+                      </div>
+                    </div>
+                  ))}
+                  <div
+                    className="image-grid-add"
+                    onClick={handleClick}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  >
+                    <span>+</span>
+                  </div>
+                </div>
+
+                {/* OCR Progress */}
+                {(isOcrRunning || ocrProgress.total > 0) && (
+                  <div className="smart-mode-progress">
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${ocrProgress.total > 0 ? (ocrProgress.completed / ocrProgress.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="progress-text">
+                      OCR: {ocrProgress.completed}/{ocrProgress.total} 完成
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ==================== */}
+        {/* Step 2: Fields       */}
+        {/* ==================== */}
+        {currentStep === 'fields' && (
+          <div className="step-fields">
+            <div className="fields-layout">
+              {/* 左側：第一張圖預覽 */}
+              <div className="fields-preview">
+                {images.length > 0 && (
+                  <>
+                    <img
+                      src={getImageSrc(images[0].originalImage)}
+                      alt="Preview"
+                      className="fields-preview-image"
+                    />
+                    <div className="fields-preview-ocr">
+                      <h4>OCR 文字</h4>
+                      <pre>{images[0].ocrText || '(無文字)'}</pre>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* 右側：欄位列表 */}
+              <div className="fields-editor">
+                <h3>定義欄位</h3>
+                <p className="fields-hint">
+                  定義要從圖片中提取的欄位（如：帳號、ID、粉絲數等）
+                </p>
+                <div className="fields-list">
+                  {fieldTemplates.map((field, index) => (
+                    <div key={field.id} className="field-item">
+                      <span className="field-index">{index + 1}</span>
+                      <input
+                        type="text"
+                        value={field.name}
+                        onChange={(e) => handleUpdateField(field.id, { name: e.target.value })}
+                        placeholder="欄位名稱"
+                        className="field-name-input"
+                      />
+                      <button
+                        className="btn-remove-field"
+                        onClick={() => handleRemoveField(field.id)}
+                        disabled={fieldTemplates.length <= 1}
+                      >
+                        x
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button className="btn-add-field" onClick={handleAddField}>
+                  + 新增欄位
+                </button>
+                <div className="fields-summary">
+                  共 {images.length} 張圖片，將解析 {fieldTemplates.length} 個欄位
+                </div>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Detection progress */}
-        {isDetecting && (
-          <div className="smart-mode-progress">
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${(detectProgress.current / detectProgress.total) * 100}%`,
-                }}
-              />
-            </div>
-            <span className="progress-text">
-              偵測進度: {detectProgress.current}/{detectProgress.total} 完成
-            </span>
           </div>
         )}
 
-        {/* Layout groups overview */}
-        {!isDetecting && layoutGroups.length > 0 && (
-          <div className="smart-mode-groups">
-            <h3>版型分組</h3>
-            <div className="groups-list">
-              {layoutGroups.map((group, index) => {
-                const groupImages = getGroupImages(group);
-                const representative = groupImages[0];
-
-                return (
-                  <div
-                    key={group.id}
-                    className={`group-card ${
-                      selectedImageId && group.imageIds.includes(selectedImageId)
-                        ? 'active'
-                        : ''
-                    }`}
-                    onClick={() => representative && handleImageSelect(representative.id)}
-                  >
-                    <div className="group-thumbnail">
-                      {representative && (
-                        <img
-                          src={getImageSrc(representative.originalImage)}
-                          alt={`Group ${index + 1}`}
-                        />
-                      )}
-                    </div>
-                    <div className="group-info">
-                      <span className="group-label">版型 {String.fromCharCode(65 + index)}</span>
-                      <span className="group-count">({groupImages.length}張)</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Block Editor for selected image (detect step) */}
-        {(currentStep === 'upload' || currentStep === 'detect') && selectedImage && selectedImage.detectedBlocks && (
-          <div className="smart-mode-editor">
-            <BlockEditor
-              image={selectedImage}
-              blocks={selectedImage.detectedBlocks}
-              onBlocksChange={handleBlocksChange}
-              selectedBlockId={selectedBlockId}
-              onSelectBlock={setSelectedBlockId}
-            />
-          </div>
-        )}
-
-        {/* Field Definition (fields step) */}
-        {currentStep === 'fields' && (
-          <div className="smart-mode-fields">
-            <h3>定義欄位</h3>
-            <p className="fields-hint">定義要從圖片中提取的欄位（如：帳號、ID、粉絲數等）</p>
-            <div className="fields-list">
-              {fieldTemplates.map((field, index) => (
-                <div key={field.id} className="field-item">
-                  <span className="field-index">{index + 1}</span>
-                  <input
-                    type="text"
-                    value={field.name}
-                    onChange={(e) => handleUpdateField(field.id, { name: e.target.value })}
-                    placeholder="欄位名稱"
-                    className="field-name-input"
-                  />
-                  <button
-                    className="btn-remove-field"
-                    onClick={() => handleRemoveField(field.id)}
-                    disabled={fieldTemplates.length <= 1}
-                  >
-                    ✕
-                  </button>
-                </div>
+        {/* ==================== */}
+        {/* Step 3: Edit         */}
+        {/* ==================== */}
+        {currentStep === 'edit' && (
+          <div className="step-edit">
+            {/* Tab 切換欄位 */}
+            <div className="edit-tabs">
+              {fieldTemplates.map(field => (
+                <button
+                  key={field.id}
+                  className={`edit-tab ${activeTab === field.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(field.id)}
+                >
+                  {field.name}
+                </button>
               ))}
             </div>
-            <button className="btn-add-field" onClick={handleAddField}>
-              + 新增欄位
-            </button>
-          </div>
-        )}
 
-        {/* Table Editor (edit step) */}
-        {currentStep === 'edit' && (
-          <div className="smart-mode-table">
-            <h3>編輯資料</h3>
-            <div className="table-container">
-              <table className="data-table">
+            {/* 表格編輯 */}
+            <div className="edit-table-container">
+              <table className="edit-table">
                 <thead>
                   <tr>
-                    <th>圖片</th>
-                    {fieldTemplates.map(field => (
-                      <th key={field.id}>{field.name}</th>
-                    ))}
+                    <th className="col-image">圖片</th>
+                    <th className="col-original">原文</th>
+                    <th className="col-translated">譯文</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {images.map((img, imgIndex) => (
-                    <tr key={img.id}>
-                      <td className="img-cell">
-                        <img src={getImageSrc(img.originalImage)} alt={`Image ${imgIndex + 1}`} />
-                        <span>{imgIndex + 1}</span>
-                      </td>
-                      {fieldTemplates.map(field => (
-                        <td key={field.id}>
+                  {images.map((img, imgIndex) => {
+                    const fieldContent = activeTab ? img.fields?.[activeTab] : null;
+                    return (
+                      <tr key={img.id}>
+                        <td className="col-image">
+                          <div className="table-image-cell">
+                            <img src={getImageSrc(img.originalImage)} alt={`${imgIndex + 1}`} />
+                            <span>{imgIndex + 1}</span>
+                          </div>
+                        </td>
+                        <td className="col-original">
                           <input
                             type="text"
-                            value={img.fields?.[field.id]?.original || ''}
+                            value={fieldContent?.original || ''}
                             onChange={(e) => {
+                              if (!activeTab) return;
                               const newFields = { ...img.fields };
-                              newFields[field.id] = {
+                              newFields[activeTab] = {
                                 original: e.target.value,
-                                translated: newFields[field.id]?.translated || '',
+                                translated: newFields[activeTab]?.translated || '',
                               };
                               setImages(prev => prev.map(i =>
                                 i.id === img.id ? { ...i, fields: newFields } : i
                               ));
                             }}
-                            placeholder={`輸入${field.name}`}
+                            placeholder="輸入原文"
+                            className="edit-input"
                           />
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                        <td className="col-translated">
+                          <input
+                            type="text"
+                            value={fieldContent?.translated || ''}
+                            onChange={(e) => {
+                              if (!activeTab) return;
+                              const newFields = { ...img.fields };
+                              newFields[activeTab] = {
+                                original: newFields[activeTab]?.original || '',
+                                translated: e.target.value,
+                              };
+                              setImages(prev => prev.map(i =>
+                                i.id === img.id ? { ...i, fields: newFields } : i
+                              ));
+                            }}
+                            placeholder={fieldContent?.translated ? '' : '(尚未翻譯)'}
+                            className="edit-input"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+            </div>
+
+            {/* 翻譯按鈕 */}
+            <div className="edit-actions">
+              <button
+                className="btn-translate-field"
+                onClick={() => activeTab && handleTranslateField(activeTab)}
+                disabled={isTranslating || !activeTab}
+              >
+                {isTranslating && translateTarget === 'field' ? '翻譯中...' : '翻譯此欄位'}
+              </button>
+              <button
+                className="btn-translate-all"
+                onClick={handleTranslateAll}
+                disabled={isTranslating}
+              >
+                {isTranslating && translateTarget === 'all' ? '翻譯中...' : '翻譯全部'}
+              </button>
             </div>
           </div>
         )}
 
-        {/* Preview (preview step) */}
+        {/* ==================== */}
+        {/* Step 4: Preview      */}
+        {/* ==================== */}
         {currentStep === 'preview' && (
-          <div className="smart-mode-preview">
-            <h3>預覽結果</h3>
-            <div className="preview-grid">
-              {images.map((img, index) => (
-                <div key={img.id} className="preview-card">
-                  <div className="preview-image">
-                    <img src={getImageSrc(img.originalImage)} alt={`Preview ${index + 1}`} />
-                  </div>
-                  <div className="preview-fields">
-                    {fieldTemplates.map(field => (
-                      <div key={field.id} className="preview-field">
-                        <span className="preview-field-name">{field.name}:</span>
-                        <span className="preview-field-original">{img.fields?.[field.id]?.original || '-'}</span>
-                        <span className="preview-field-translated">{img.fields?.[field.id]?.translated || '-'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+          <div className="step-preview">
+            {/* 圖片切換 */}
+            <div className="preview-nav">
+              <button
+                className="btn-prev-image"
+                onClick={() => setPreviewIndex(i => Math.max(0, i - 1))}
+                disabled={previewIndex === 0}
+              >
+                ← 上一張
+              </button>
+              <span className="preview-counter">
+                {previewIndex + 1} / {images.length}
+              </span>
+              <button
+                className="btn-next-image"
+                onClick={() => setPreviewIndex(i => Math.min(images.length - 1, i + 1))}
+                disabled={previewIndex === images.length - 1}
+              >
+                下一張 →
+              </button>
             </div>
-            <div className="preview-actions">
-              <button className="btn-export">下載全部</button>
+
+            {/* 預覽區域 */}
+            <div className="preview-area">
+              {images[previewIndex] && (
+                <>
+                  <div className="preview-image-wrapper">
+                    <img
+                      src={getImageSrc(images[previewIndex].originalImage)}
+                      alt={`Preview ${previewIndex + 1}`}
+                      className="preview-main-image"
+                    />
+                  </div>
+                  <div className="preview-fields-list">
+                    {fieldTemplates.map(field => {
+                      const content = images[previewIndex].fields?.[field.id];
+                      return (
+                        <div key={field.id} className="preview-field-row">
+                          <span className="preview-field-name">{field.name}:</span>
+                          <span className="preview-field-value">
+                            {showTranslated
+                              ? (content?.translated || content?.original || '-')
+                              : (content?.original || '-')
+                            }
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* 控制列 */}
+            <div className="preview-controls">
+              <button
+                className={`btn-toggle-text ${showTranslated ? 'active' : ''}`}
+                onClick={() => setShowTranslated(!showTranslated)}
+              >
+                {showTranslated ? '顯示譯文' : '顯示原文'}
+              </button>
+            </div>
+
+            {/* 輸出按鈕 */}
+            <div className="preview-export">
+              <button className="btn-export-single" onClick={handleExportSingle}>
+                輸出此張
+              </button>
+              <button className="btn-export-all" onClick={handleExportAll}>
+                輸出全部 (ZIP)
+              </button>
             </div>
           </div>
         )}
       </div>
 
       {/* Bottom navigation */}
-      {images.length > 0 && (
-        <div className="smart-mode-nav">
-          <button
-            className="btn-prev"
-            onClick={handlePrevStep}
-            disabled={currentStep === 'upload'}
-          >
-            ← 上一步
-          </button>
-          <button
-            className="btn-next"
-            onClick={handleNextStep}
-            disabled={!canGoNext() || isParsing || isTranslating || isDetecting}
-          >
-            {isParsing ? '解析中...' : isTranslating ? '翻譯中...' : currentStep === 'preview' ? '完成' : '下一步 →'}
-          </button>
-        </div>
-      )}
+      <div className="smart-mode-nav">
+        <button
+          className="btn-prev"
+          onClick={handlePrevStep}
+          disabled={currentStep === 'upload'}
+        >
+          ← 上一步
+        </button>
+        <button
+          className="btn-next"
+          onClick={handleNextStep}
+          disabled={!canGoNext() || isParsing || (currentStep === 'upload' && isOcrRunning)}
+        >
+          {isParsing
+            ? '解析中...'
+            : currentStep === 'upload' && isOcrRunning
+              ? 'OCR 處理中...'
+              : currentStep === 'preview'
+                ? '完成'
+                : currentStep === 'fields'
+                  ? '開始 AI 解析 →'
+                  : '下一步 →'
+          }
+        </button>
+      </div>
     </div>
   );
-}
-
-/**
- * Get human-readable status label
- */
-function getStatusLabel(status: ImageData['status']): string {
-  const labels: Record<string, string> = {
-    pending: '等待中',
-    detecting: '偵測中',
-    detected: '已偵測',
-    error: '錯誤',
-    translating: '翻譯中',
-    translated: '已翻譯',
-    inpainting: '處理中',
-    inpainted: '已處理',
-    ready: '就緒',
-  };
-  return labels[status] || status;
 }
 
 export default SmartModePage;
