@@ -1509,8 +1509,103 @@ const Preview: React.FC<PreviewProps> = ({
             </div>
           )}
 
+          {/* Cropped Image settings (when selected) */}
+          {selectedCrop && onImagesChange && (
+            <div className="sidebar-section field-settings">
+              <h3>擷取圖片設定</h3>
+
+              <div className="crop-preview-thumb">
+                <img src={selectedCrop.imageData} alt="Cropped preview" />
+              </div>
+
+              <div className="setting-row">
+                <label>X</label>
+                <input
+                  type="number"
+                  value={selectedCrop.x}
+                  onChange={(e) => updateCroppedImage(selectedCrop.id, { x: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>Y</label>
+                <input
+                  type="number"
+                  value={selectedCrop.y}
+                  onChange={(e) => updateCroppedImage(selectedCrop.id, { y: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>寬度</label>
+                <input
+                  type="number"
+                  value={selectedCrop.outputWidth}
+                  min={10}
+                  onChange={(e) => {
+                    const newWidth = Number(e.target.value);
+                    const aspectRatio = selectedCrop.outputHeight / selectedCrop.outputWidth;
+                    updateCroppedImage(selectedCrop.id, {
+                      outputWidth: newWidth,
+                      outputHeight: Math.round(newWidth * aspectRatio),
+                    });
+                  }}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>高度</label>
+                <input
+                  type="number"
+                  value={selectedCrop.outputHeight}
+                  min={10}
+                  onChange={(e) => {
+                    const newHeight = Number(e.target.value);
+                    const aspectRatio = selectedCrop.outputWidth / selectedCrop.outputHeight;
+                    updateCroppedImage(selectedCrop.id, {
+                      outputHeight: newHeight,
+                      outputWidth: Math.round(newHeight * aspectRatio),
+                    });
+                  }}
+                />
+              </div>
+
+              <div className="setting-row">
+                <label>縮放 %</label>
+                <input
+                  type="range"
+                  min="10"
+                  max="300"
+                  value={Math.round((selectedCrop.outputWidth / selectedCrop.sourceRect.width) * 100)}
+                  onChange={(e) => {
+                    const scale = Number(e.target.value) / 100;
+                    updateCroppedImage(selectedCrop.id, {
+                      outputWidth: Math.round(selectedCrop.sourceRect.width * scale),
+                      outputHeight: Math.round(selectedCrop.sourceRect.height * scale),
+                    });
+                  }}
+                />
+                <span>{Math.round((selectedCrop.outputWidth / selectedCrop.sourceRect.width) * 100)}%</span>
+              </div>
+
+              <div className="setting-row">
+                <button
+                  className="btn-danger"
+                  onClick={() => deleteCroppedImage(selectedCrop.id)}
+                >
+                  刪除擷取圖片
+                </button>
+              </div>
+
+              <p className="setting-hint">
+                Arrow: move 1px | Shift+Arrow: 10px<br />
+                Delete: remove image
+              </p>
+            </div>
+          )}
+
           {/* Field preview list */}
-          {!selectedField && !selectedStatic && (
+          {!selectedField && !selectedStatic && !selectedCrop && (
             <div className="sidebar-section">
               <h3>Fields</h3>
               <div className="field-preview-list">
