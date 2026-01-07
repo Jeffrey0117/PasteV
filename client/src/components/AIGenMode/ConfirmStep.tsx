@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import type { SlideContent, ImageSearchResult } from './types';
 
 interface ConfirmStepProps {
@@ -10,6 +10,16 @@ interface ConfirmStepProps {
   onReorderSlides: (fromIndex: number, toIndex: number) => void;
   onRegenerateSlide: (slideId: string) => void;
   onSearchImage: (slideId: string, query: string) => Promise<ImageSearchResult[]>;
+}
+
+/** 將圖片轉為 base64 */
+function imageToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 /**
@@ -26,12 +36,15 @@ export function ConfirmStep({
   onRegenerateSlide,
   onSearchImage,
 }: ConfirmStepProps) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void onRegenerateSlide; // 預留給未來重新生成功能
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(
     slides[0]?.id || null
   );
   const [isSearchingImage, setIsSearchingImage] = useState(false);
   const [searchResults, setSearchResults] = useState<ImageSearchResult[]>([]);
   const [imageQuery, setImageQuery] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedSlide = slides.find((s) => s.id === selectedSlideId);
   const selectedIndex = slides.findIndex((s) => s.id === selectedSlideId);
@@ -64,6 +77,35 @@ export function ConfirmStep({
       });
       setSearchResults([]);
       setImageQuery('');
+    },
+    [selectedSlideId, onUpdateSlide]
+  );
+
+  // 上傳圖片
+  const handleImageUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !selectedSlideId) return;
+
+      try {
+        const base64 = await imageToBase64(file);
+        onUpdateSlide(selectedSlideId, {
+          suggestedImage: {
+            id: `upload-${Date.now()}`,
+            url: base64,
+            thumbnailUrl: base64,
+            author: '自訂上傳',
+            source: 'unsplash', // 標記為自訂
+          },
+        });
+      } catch (err) {
+        console.error('Image upload error:', err);
+      }
+
+      // 清除 input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     },
     [selectedSlideId, onUpdateSlide]
   );
@@ -240,6 +282,25 @@ export function ConfirmStep({
                     </div>
                   ) : (
                     <div className="image-search">
+                      {/* 上傳按鈕 */}
+                      <div className="upload-image-row">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          hidden
+                        />
+                        <button
+                          className="btn-upload-image"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          📁 上傳圖片
+                        </button>
+                        <span className="upload-hint">或搜尋免費圖庫</span>
+                      </div>
+
+                      {/* 搜尋 */}
                       <div className="search-input-row">
                         <input
                           type="text"
