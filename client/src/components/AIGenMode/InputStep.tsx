@@ -1,5 +1,4 @@
-import React from 'react';
-import type { AIGenerationInput, AIGenInputMode, AIGenStyle, AIGenLanguage } from './types';
+import type { AIGenerationInput, AIGenStyle, AIGenLanguage } from './types';
 import { STYLE_OPTIONS, LANGUAGE_OPTIONS } from './types';
 
 interface InputStepProps {

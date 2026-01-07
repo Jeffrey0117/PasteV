@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef } from 'react';
-import type { SlideContent, ImageSearchResult } from './types';
+import { useState, useCallback, useRef } from 'react';
+import type { SlideContent, ImageSearchResult, EmbeddedImage } from './types';
 
 interface ConfirmStepProps {
   slides: SlideContent[];
@@ -24,11 +24,10 @@ function imageToBase64(file: File): Promise<string> {
 
 /**
  * Step 2: 確認內容
- * 編輯、調整、選擇圖片
+ * 編輯、調整、上傳素材圖片
  */
 export function ConfirmStep({
   slides,
-  includeImages,
   onUpdateSlide,
   onDeleteSlide,
   onAddSlide,
@@ -38,65 +37,40 @@ export function ConfirmStep({
 }: ConfirmStepProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   void onRegenerateSlide; // 預留給未來重新生成功能
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void onSearchImage; // 預留給未來圖庫搜尋功能
+
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(
     slides[0]?.id || null
   );
-  const [isSearchingImage, setIsSearchingImage] = useState(false);
-  const [searchResults, setSearchResults] = useState<ImageSearchResult[]>([]);
-  const [imageQuery, setImageQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedSlide = slides.find((s) => s.id === selectedSlideId);
   const selectedIndex = slides.findIndex((s) => s.id === selectedSlideId);
 
-  // 搜尋圖片
-  const handleImageSearch = useCallback(async () => {
-    if (!selectedSlideId || !imageQuery.trim()) return;
-
-    setIsSearchingImage(true);
-    try {
-      const results = await onSearchImage(selectedSlideId, imageQuery);
-      setSearchResults(results);
-    } finally {
-      setIsSearchingImage(false);
-    }
-  }, [selectedSlideId, imageQuery, onSearchImage]);
-
-  // 選擇圖片
-  const handleSelectImage = useCallback(
-    (image: ImageSearchResult) => {
-      if (!selectedSlideId) return;
-      onUpdateSlide(selectedSlideId, {
-        suggestedImage: {
-          id: image.id,
-          url: image.url,
-          thumbnailUrl: image.thumbnailUrl,
-          author: image.author,
-          source: image.source,
-        },
-      });
-      setSearchResults([]);
-      setImageQuery('');
-    },
-    [selectedSlideId, onUpdateSlide]
-  );
-
-  // 上傳圖片
+  // 上傳素材圖片（支援多張）
   const handleImageUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file || !selectedSlideId) return;
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0 || !selectedSlideId || !selectedSlide) return;
 
       try {
-        const base64 = await imageToBase64(file);
-        onUpdateSlide(selectedSlideId, {
-          suggestedImage: {
-            id: `upload-${Date.now()}`,
+        const newImages: EmbeddedImage[] = [];
+
+        for (const file of files) {
+          const base64 = await imageToBase64(file);
+          newImages.push({
+            id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             url: base64,
             thumbnailUrl: base64,
-            author: '自訂上傳',
-            source: 'unsplash', // 標記為自訂
-          },
+            name: file.name,
+          });
+        }
+
+        // 合併現有圖片
+        const existingImages = selectedSlide.images || [];
+        onUpdateSlide(selectedSlideId, {
+          images: [...existingImages, ...newImages],
         });
       } catch (err) {
         console.error('Image upload error:', err);
@@ -107,7 +81,20 @@ export function ConfirmStep({
         fileInputRef.current.value = '';
       }
     },
-    [selectedSlideId, onUpdateSlide]
+    [selectedSlideId, selectedSlide, onUpdateSlide]
+  );
+
+  // 刪除素材圖片
+  const handleDeleteImage = useCallback(
+    (imageId: string) => {
+      if (!selectedSlideId || !selectedSlide) return;
+
+      const updatedImages = (selectedSlide.images || []).filter(
+        (img) => img.id !== imageId
+      );
+      onUpdateSlide(selectedSlideId, { images: updatedImages });
+    },
+    [selectedSlideId, selectedSlide, onUpdateSlide]
   );
 
   // 移動 slide
@@ -142,9 +129,9 @@ export function ConfirmStep({
             >
               <div className="slide-index">{index + 1}</div>
               <div className="slide-preview">
-                {slide.suggestedImage ? (
+                {slide.images && slide.images.length > 0 ? (
                   <img
-                    src={slide.suggestedImage.thumbnailUrl}
+                    src={slide.images[0].thumbnailUrl}
                     alt=""
                     className="slide-thumb"
                   />
@@ -159,6 +146,11 @@ export function ConfirmStep({
                     {slide.body?.slice(0, 40) || '(無內容)'}
                     {slide.body?.length > 40 ? '...' : ''}
                   </span>
+                  {slide.images && slide.images.length > 0 && (
+                    <span className="slide-image-count">
+                      📷 {slide.images.length}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -256,102 +248,52 @@ export function ConfirmStep({
                 />
               </div>
 
-              {/* 圖片選擇 */}
-              {includeImages && (
-                <div className="form-group image-picker">
-                  <label>背景圖片</label>
-                  {selectedSlide.suggestedImage ? (
-                    <div className="selected-image">
-                      <img
-                        src={selectedSlide.suggestedImage.thumbnailUrl}
-                        alt=""
-                      />
-                      <div className="image-info">
-                        <span>by {selectedSlide.suggestedImage.author}</span>
-                        <button
-                          className="btn-remove-image"
-                          onClick={() =>
-                            onUpdateSlide(selectedSlide.id, {
-                              suggestedImage: undefined,
-                            })
-                          }
-                        >
-                          移除
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="image-search">
-                      {/* 上傳按鈕 */}
-                      <div className="upload-image-row">
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          hidden
-                        />
-                        <button
-                          className="btn-upload-image"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          📁 上傳圖片
-                        </button>
-                        <span className="upload-hint">或搜尋免費圖庫</span>
-                      </div>
+              {/* 素材圖片 */}
+              <div className="form-group embedded-images">
+                <label>素材圖片</label>
 
-                      {/* 搜尋 */}
-                      <div className="search-input-row">
-                        <input
-                          type="text"
-                          value={imageQuery}
-                          onChange={(e) => setImageQuery(e.target.value)}
-                          placeholder="輸入關鍵字搜尋圖片..."
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleImageSearch();
-                          }}
-                        />
+                {/* 已上傳的圖片 */}
+                {selectedSlide.images && selectedSlide.images.length > 0 && (
+                  <div className="image-grid">
+                    {selectedSlide.images.map((img) => (
+                      <div key={img.id} className="image-grid-item">
+                        <img src={img.thumbnailUrl} alt={img.name || ''} />
                         <button
-                          className="btn-search"
-                          onClick={handleImageSearch}
-                          disabled={isSearchingImage}
+                          className="btn-delete-image"
+                          onClick={() => handleDeleteImage(img.id)}
+                          title="刪除"
                         >
-                          {isSearchingImage ? '搜尋中...' : '搜尋'}
+                          ×
                         </button>
+                        {img.name && (
+                          <span className="image-name">{img.name}</span>
+                        )}
                       </div>
-                      {selectedSlide.imageKeywords && (
-                        <div className="suggested-keywords">
-                          <span>建議：</span>
-                          {selectedSlide.imageKeywords.map((kw) => (
-                            <button
-                              key={kw}
-                              className="keyword-btn"
-                              onClick={() => {
-                                setImageQuery(kw);
-                              }}
-                            >
-                              {kw}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {searchResults.length > 0 && (
-                        <div className="search-results">
-                          {searchResults.map((img) => (
-                            <div
-                              key={img.id}
-                              className="search-result-item"
-                              onClick={() => handleSelectImage(img)}
-                            >
-                              <img src={img.thumbnailUrl} alt="" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                )}
+
+                {/* 上傳按鈕 */}
+                <div className="upload-image-area">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageUpload}
+                    hidden
+                  />
+                  <button
+                    className="btn-upload-image"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    + 上傳圖片
+                  </button>
+                  <span className="upload-hint">
+                    支援多選，圖片會顯示在卡片內容中
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
           </>
         ) : (

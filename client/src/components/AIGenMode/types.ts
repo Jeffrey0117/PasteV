@@ -25,6 +25,14 @@ export interface AIGenerationInput {
   includeImages: boolean;
 }
 
+/** 內嵌圖片 */
+export interface EmbeddedImage {
+  id: string;
+  url: string;           // base64 或 URL
+  thumbnailUrl: string;
+  name?: string;         // 檔名或描述
+}
+
 /** 單張卡片內容 */
 export interface SlideContent {
   id: string;
@@ -34,6 +42,8 @@ export interface SlideContent {
   bulletPoints?: string[];
   footnote?: string;
   imageKeywords?: string[];
+  /** 內嵌素材圖片（產品圖、截圖等） */
+  images?: EmbeddedImage[];
   suggestedImage?: {
     id: string;
     url: string;

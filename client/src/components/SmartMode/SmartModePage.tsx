@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { ImageData, FieldTemplate, FieldContent } from '../../types';
-import { createImageData, createDefaultField, generateId } from '../../types';
+import { createImageData, createDefaultField } from '../../types';
 import './SmartModePage.css';
 
 /** Smart Mode 4 步驟 */

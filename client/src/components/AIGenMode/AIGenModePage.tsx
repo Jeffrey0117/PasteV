@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { InputStep } from './InputStep';
 import { ConfirmStep } from './ConfirmStep';
 import { PreviewStep } from './PreviewStep';
@@ -7,7 +7,6 @@ import type {
   AIGenerationInput,
   SlideContent,
   GeneratedContent,
-  DEFAULT_INPUT,
 } from './types';
 import './AIGenModePage.css';
 
@@ -97,7 +96,7 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
   }, [input]);
 
   // 搜尋圖片
-  const handleSearchImage = useCallback(async (slideId: string, query: string) => {
+  const handleSearchImage = useCallback(async (_slideId: string, query: string) => {
     try {
       const response = await fetch(`/api/images/search?q=${encodeURIComponent(query)}&count=6`);
       if (!response.ok) throw new Error('圖片搜尋失敗');
@@ -196,9 +195,9 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
     switch (currentStep) {
       case 'input':
         if (input.mode === 'topic') {
-          return input.topic.trim().length > 0;
+          return (input.topic ?? '').trim().length > 0;
         } else {
-          return input.rawContent.trim().length > 0;
+          return (input.rawContent ?? '').trim().length > 0;
         }
       case 'confirm':
         return slides.length > 0;

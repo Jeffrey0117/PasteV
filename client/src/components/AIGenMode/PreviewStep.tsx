@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { SlideContent } from './types';
 
 interface PreviewStepProps {
@@ -96,6 +96,51 @@ export function PreviewStep({ slides, canvasSettings }: PreviewStepProps) {
         for (const point of slide.bulletPoints.slice(0, 4)) {
           ctx.fillText(`• ${point}`, padding, y);
           y += 44;
+        }
+      }
+
+      // 素材圖片 (Embedded images)
+      if (slide.images && slide.images.length > 0) {
+        const imgSize = 120;
+        const imgGap = 16;
+        const startX = padding;
+        const imgY = canvas.height - padding - imgSize;
+
+        for (let i = 0; i < Math.min(slide.images.length, 4); i++) {
+          try {
+            const embeddedImg = new Image();
+            embeddedImg.crossOrigin = 'anonymous';
+            await new Promise<void>((resolve, reject) => {
+              embeddedImg.onload = () => resolve();
+              embeddedImg.onerror = reject;
+              embeddedImg.src = slide.images![i].url;
+            });
+
+            const imgX = startX + i * (imgSize + imgGap);
+
+            // 圓角矩形裁切
+            ctx.save();
+            ctx.beginPath();
+            const radius = 8;
+            ctx.roundRect(imgX, imgY, imgSize, imgSize, radius);
+            ctx.clip();
+
+            // 繪製圖片 (cover)
+            const imgScale = Math.max(imgSize / embeddedImg.width, imgSize / embeddedImg.height);
+            const drawW = embeddedImg.width * imgScale;
+            const drawH = embeddedImg.height * imgScale;
+            const drawX = imgX + (imgSize - drawW) / 2;
+            const drawY = imgY + (imgSize - drawH) / 2;
+            ctx.drawImage(embeddedImg, drawX, drawY, drawW, drawH);
+
+            // 邊框
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+          } catch {
+            // 圖片載入失敗，跳過
+          }
         }
       }
 
@@ -218,6 +263,19 @@ export function PreviewStep({ slides, canvasSettings }: PreviewStepProps) {
                   <li key={i}>{point}</li>
                 ))}
               </ul>
+            )}
+            {/* 素材圖片 */}
+            {currentSlide.images && currentSlide.images.length > 0 && (
+              <div className="preview-embedded-images">
+                {currentSlide.images.slice(0, 4).map((img) => (
+                  <img
+                    key={img.id}
+                    src={img.thumbnailUrl}
+                    alt={img.name || ''}
+                    className="preview-embedded-img"
+                  />
+                ))}
+              </div>
             )}
             {currentSlide.suggestedImage && (
               <div className="preview-credit">
