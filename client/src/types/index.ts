@@ -219,7 +219,8 @@ export type AppStep =
   | 'fields'    // 定義欄位
   | 'edit'      // 表格編輯
   | 'preview'   // 預覽輸出
-  | 'smart';    // Smart Mode
+  | 'smart'     // Smart Mode
+  | 'ai-gen';   // AI Generation Mode
 
 /** 畫布設定 */
 export interface CanvasSettings {

@@ -17,6 +17,7 @@ import { FieldEditor } from './components/FieldEditor';
 import { TableEditor } from './components/TableEditor';
 import { Preview } from './components/Preview';
 import { SmartModePage } from './components/SmartMode';
+import { AIGenModePage } from './components/AIGenMode';
 
 const API_BASE = 'http://localhost:3001/api';
 
@@ -462,7 +463,7 @@ function App() {
               </p>
             </div>
           </div>
-          {currentStep !== 'upload' && currentStep !== 'smart' && (
+          {currentStep !== 'upload' && currentStep !== 'smart' && currentStep !== 'ai-gen' && (
             <button onClick={reset} className="btn secondary">
               重新開始
             </button>
@@ -470,7 +471,7 @@ function App() {
         </div>
 
         {/* Step indicator - only show for template mode */}
-        {currentStep !== 'upload' && currentStep !== 'smart' && (
+        {currentStep !== 'upload' && currentStep !== 'smart' && currentStep !== 'ai-gen' && (
           <div className="step-indicator">
             <div
               className={`step-item ${currentStep === 'fields' ? 'active' : ''} ${
@@ -537,6 +538,13 @@ function App() {
                   <div className="mode-info">
                     <h3>Smart Mode</h3>
                     <p>AI 自動偵測文字區塊，智慧翻譯並保留原始排版</p>
+                  </div>
+                </div>
+                <div className="mode-card" onClick={() => goToStep('ai-gen')}>
+                  <div className="mode-icon mode-icon-gen">G</div>
+                  <div className="mode-info">
+                    <h3>AI Gen Mode</h3>
+                    <p>輸入主題，AI 自動生成社群圖文內容</p>
                   </div>
                   <span className="mode-badge">NEW</span>
                 </div>
@@ -644,6 +652,11 @@ function App() {
         {/* Smart Mode */}
         {currentStep === 'smart' && (
           <SmartModePage onBack={() => goToStep('upload')} />
+        )}
+
+        {/* AI Generation Mode */}
+        {currentStep === 'ai-gen' && (
+          <AIGenModePage onBack={() => goToStep('upload')} />
         )}
       </main>
 

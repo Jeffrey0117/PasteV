@@ -9,6 +9,8 @@ import translateRouter from './routes/translate.js';
 import generateRouter from './routes/generate.js';
 import parseRouter from './routes/parse.js';
 import detectBlocksRouter from './routes/detect-blocks.js';
+import aiGenerateRouter from './routes/ai-generate.js';
+import imageSearchRouter from './routes/image-search.js';
 
 dotenv.config();
 
@@ -28,6 +30,8 @@ app.use('/api/translate', translateRouter);
 app.use('/api/generate', generateRouter);
 app.use('/api/parse', parseRouter);
 app.use('/api/detect-blocks', detectBlocksRouter);
+app.use('/api/ai-generate', aiGenerateRouter);
+app.use('/api/images', imageSearchRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
