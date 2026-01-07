@@ -141,6 +141,30 @@ export interface LayoutGroup {
 }
 
 /**
+ * 裁切的圖片區域
+ */
+export interface CroppedImage {
+  /** 唯一識別碼 */
+  id: string;
+
+  /** 裁切後的圖片 base64 */
+  imageData: string;
+
+  /** 來源圖片中的位置 (原始座標) */
+  sourceRect: { x: number; y: number; width: number; height: number };
+
+  /** 輸出畫布上的位置 */
+  x: number;
+  y: number;
+
+  /** 輸出時的寬度 */
+  outputWidth: number;
+
+  /** 輸出時的高度 */
+  outputHeight: number;
+}
+
+/**
  * 單張圖片的完整資料
  */
 export interface ImageData {
@@ -167,6 +191,9 @@ export interface ImageData {
 
   /** 該圖片專屬的靜態文字 (浮水印/Logo) */
   staticTexts?: StaticText[];
+
+  /** 從原圖擷取的圖片區域 */
+  croppedImages?: CroppedImage[];
 
   // Smart Mode 屬性
   /** 偵測到的文字區塊 */

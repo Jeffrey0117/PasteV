@@ -8,6 +8,7 @@ import type {
   FieldContent,
   AppStep,
   CanvasSettings,
+  CroppedImage,
 } from './types';
 import { createDefaultProject, generateId, createDefaultField } from './types';
 
@@ -266,6 +267,23 @@ function App() {
         prev.map((img) =>
           img.id === imageId
             ? { ...img, fields: { ...img.fields, [fieldId]: content } }
+            : img
+        )
+      );
+    },
+    []
+  );
+
+  // Add cropped image handler for TableEditor
+  const handleAddCroppedImage = useCallback(
+    (imageId: string, croppedImage: CroppedImage) => {
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === imageId
+            ? {
+                ...img,
+                croppedImages: [...(img.croppedImages || []), croppedImage],
+              }
             : img
         )
       );
@@ -568,6 +586,8 @@ function App() {
               onTranslateField={handleTranslateField}
               onTranslateAll={handleTranslateAll}
               isTranslating={isTranslating}
+              canvasSettings={canvasSettings}
+              onAddCroppedImage={handleAddCroppedImage}
             />
             <div className="step-actions">
               <button onClick={() => goToStep('fields')} className="btn secondary">

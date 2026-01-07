@@ -1,7 +1,8 @@
-import React, { useMemo, useCallback, useRef, useEffect } from 'react';
-import type { ImageData, FieldTemplate, FieldContent } from '../../types';
+import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import type { ImageData, FieldTemplate, FieldContent, CroppedImage, CanvasSettings } from '../../types';
 import { FieldTabs } from './FieldTabs';
 import { EditableCell } from './EditableCell';
+import { ImageCropModal } from './ImageCropModal';
 import './TableEditor.css';
 
 /**
@@ -24,6 +25,10 @@ export interface TableEditorProps {
   onTranslateAll: () => Promise<void>;
   /** Translation loading state */
   isTranslating: boolean;
+  /** Canvas settings for crop positioning */
+  canvasSettings?: CanvasSettings;
+  /** Handler for adding cropped image */
+  onAddCroppedImage?: (imageId: string, croppedImage: CroppedImage) => void;
 }
 
 /** Row data for the table */
@@ -32,6 +37,8 @@ interface RowData {
   thumbnail: string;
   original: string;
   translated: string;
+  imageWidth: number;
+  imageHeight: number;
 }
 
 /**
@@ -55,9 +62,14 @@ export const TableEditor: React.FC<TableEditorProps> = ({
   onTranslateField,
   onTranslateAll,
   isTranslating,
+  canvasSettings,
+  onAddCroppedImage,
 }) => {
   const tableRef = useRef<HTMLTableElement>(null);
   const cellRefs = useRef<Map<string, HTMLElement>>(new Map());
+
+  // Crop modal state
+  const [cropModalImage, setCropModalImage] = useState<RowData | null>(null);
 
   // Get active field info
   const activeField = useMemo(() => {
@@ -71,6 +83,8 @@ export const TableEditor: React.FC<TableEditorProps> = ({
       thumbnail: img.originalImage,
       original: img.fields[activeFieldId]?.original || '',
       translated: img.fields[activeFieldId]?.translated || '',
+      imageWidth: img.width,
+      imageHeight: img.height,
     }));
   }, [images, activeFieldId]);
 
@@ -244,6 +258,15 @@ export const TableEditor: React.FC<TableEditorProps> = ({
                         loading="lazy"
                       />
                       <span className="thumbnail-number">{rowIndex + 1}</span>
+                      {onAddCroppedImage && (
+                        <button
+                          className="thumbnail-crop-btn"
+                          onClick={() => setCropModalImage(row)}
+                          title="擷取圖片區域"
+                        >
+                          ✂
+                        </button>
+                      )}
                     </div>
                   </td>
 
@@ -307,6 +330,22 @@ export const TableEditor: React.FC<TableEditorProps> = ({
           <span className="hint">Ctrl+Shift+T: Translate field</span>
         </div>
       </div>
+
+      {/* Image Crop Modal */}
+      {cropModalImage && canvasSettings && onAddCroppedImage && (
+        <ImageCropModal
+          imageData={cropModalImage.thumbnail}
+          imageWidth={cropModalImage.imageWidth}
+          imageHeight={cropModalImage.imageHeight}
+          canvasWidth={canvasSettings.width}
+          canvasHeight={canvasSettings.height}
+          onClose={() => setCropModalImage(null)}
+          onConfirm={(croppedImage) => {
+            onAddCroppedImage(cropModalImage.imageId, croppedImage);
+            setCropModalImage(null);
+          }}
+        />
+      )}
     </div>
   );
 };

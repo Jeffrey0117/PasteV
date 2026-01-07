@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
-import type { ImageData, FieldTemplate, CanvasSettings, StaticText, SavedTemplate, SavedProject } from '../../types';
+import type { ImageData, FieldTemplate, CanvasSettings, StaticText, SavedTemplate, SavedProject, CroppedImage } from '../../types';
 import ExportButton from './ExportButton';
 import './Preview.css';
 
@@ -46,15 +46,16 @@ const Preview: React.FC<PreviewProps> = ({
   const [zoom, setZoom] = useState(1);
   const [autoFitZoom, setAutoFitZoom] = useState(1);
 
-  // Selection state - can select either field or static text
+  // Selection state - can select either field, static text, or cropped image
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [selectedStaticId, setSelectedStaticId] = useState<string | null>(null);
+  const [selectedCropId, setSelectedCropId] = useState<string | null>(null);
 
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [dragStartItemPos, setDragStartItemPos] = useState({ x: 0, y: 0 });
-  const [dragType, setDragType] = useState<'field' | 'static' | null>(null);
+  const [dragType, setDragType] = useState<'field' | 'static' | 'crop' | null>(null);
 
   // Resize state
   const [isResizing, setIsResizing] = useState(false);
@@ -68,6 +69,8 @@ const Preview: React.FC<PreviewProps> = ({
   const templateStaticTexts = canvasSettings.templateStaticTexts || [];
   // Combined for rendering
   const allStaticTexts = [...templateStaticTexts, ...imageStaticTexts];
+  // Cropped images for current image
+  const croppedImages = currentImage?.croppedImages || [];
 
   const selectedField = fields.find((f) => f.id === selectedFieldId);
   // Check if selected static is template or per-image
@@ -75,17 +78,60 @@ const Preview: React.FC<PreviewProps> = ({
   const selectedImageStatic = imageStaticTexts.find((s) => s.id === selectedStaticId);
   const selectedStatic = selectedTemplateStatic || selectedImageStatic;
   const isSelectedTemplate = !!selectedTemplateStatic;
+  // Selected cropped image
+  const selectedCrop = croppedImages.find((c) => c.id === selectedCropId);
 
   // Clear other selection when selecting
   const selectField = useCallback((id: string | null) => {
     setSelectedFieldId(id);
     setSelectedStaticId(null);
+    setSelectedCropId(null);
   }, []);
 
   const selectStatic = useCallback((id: string | null) => {
     setSelectedStaticId(id);
     setSelectedFieldId(null);
+    setSelectedCropId(null);
   }, []);
+
+  const selectCrop = useCallback((id: string | null) => {
+    setSelectedCropId(id);
+    setSelectedFieldId(null);
+    setSelectedStaticId(null);
+  }, []);
+
+  // Update cropped image
+  const updateCroppedImage = useCallback(
+    (cropId: string, updates: Partial<CroppedImage>) => {
+      if (!onImagesChange || !currentImage) return;
+      const updatedCrops = (currentImage.croppedImages || []).map((c) =>
+        c.id === cropId ? { ...c, ...updates } : c
+      );
+      onImagesChange(
+        images.map((img) =>
+          img.id === currentImage.id ? { ...img, croppedImages: updatedCrops } : img
+        )
+      );
+    },
+    [images, currentImage, onImagesChange]
+  );
+
+  // Delete cropped image
+  const deleteCroppedImage = useCallback(
+    (cropId: string) => {
+      if (!onImagesChange || !currentImage) return;
+      const updatedCrops = (currentImage.croppedImages || []).filter((c) => c.id !== cropId);
+      onImagesChange(
+        images.map((img) =>
+          img.id === currentImage.id ? { ...img, croppedImages: updatedCrops } : img
+        )
+      );
+      if (selectedCropId === cropId) {
+        setSelectedCropId(null);
+      }
+    },
+    [images, currentImage, onImagesChange, selectedCropId]
+  );
 
   // Calculate auto-fit zoom
   useEffect(() => {
@@ -466,6 +512,27 @@ const Preview: React.FC<PreviewProps> = ({
     [onImagesChange, onCanvasSettingsChange, allStaticTexts, getCanvasPos, selectStatic]
   );
 
+  // Mouse down on cropped image - start drag
+  const handleCropMouseDown = useCallback(
+    (e: React.MouseEvent, cropId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!onImagesChange) return;
+
+      const crop = croppedImages.find(c => c.id === cropId);
+      if (!crop) return;
+
+      selectCrop(cropId);
+      const pos = getCanvasPos(e);
+      setDragStartPos(pos);
+      setDragStartItemPos({ x: crop.x, y: crop.y });
+      setDragType('crop');
+      setIsDragging(true);
+    },
+    [onImagesChange, croppedImages, getCanvasPos, selectCrop]
+  );
+
   // Mouse move - drag or resize
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -520,6 +587,8 @@ const Preview: React.FC<PreviewProps> = ({
           updateField(selectedFieldId, { x: newX, y: newY });
         } else if (dragType === 'static' && selectedStaticId) {
           updateStaticText(selectedStaticId, { x: newX, y: newY });
+        } else if (dragType === 'crop' && selectedCropId) {
+          updateCroppedImage(selectedCropId, { x: newX, y: newY });
         }
       }
     };
@@ -539,7 +608,7 @@ const Preview: React.FC<PreviewProps> = ({
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, isResizing, resizeType, selectedFieldId, selectedStaticId, dragStartPos, dragStartItemPos, resizeStart, dragType, getCanvasPos, updateField, updateStaticText, fields, canvasSettings.width]);
+  }, [isDragging, isResizing, resizeType, selectedFieldId, selectedStaticId, selectedCropId, dragStartPos, dragStartItemPos, resizeStart, dragType, getCanvasPos, updateField, updateStaticText, updateCroppedImage, fields, canvasSettings.width]);
 
   // Font resize handle mouse down (corner)
   const handleResizeMouseDown = useCallback(
@@ -588,6 +657,7 @@ const Preview: React.FC<PreviewProps> = ({
     if (e.target === canvasRef.current) {
       setSelectedFieldId(null);
       setSelectedStaticId(null);
+      setSelectedCropId(null);
     }
   }, []);
 
@@ -739,12 +809,35 @@ const Preview: React.FC<PreviewProps> = ({
         }
       }
 
+      // Arrow keys for cropped image
+      if (selectedCropId && onImagesChange) {
+        const crop = croppedImages.find((c) => c.id === selectedCropId);
+        if (crop && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          switch (e.key) {
+            case 'ArrowUp': updateCroppedImage(selectedCropId, { y: Math.max(0, crop.y - step) }); break;
+            case 'ArrowDown': updateCroppedImage(selectedCropId, { y: crop.y + step }); break;
+            case 'ArrowLeft': updateCroppedImage(selectedCropId, { x: Math.max(0, crop.x - step) }); break;
+            case 'ArrowRight': updateCroppedImage(selectedCropId, { x: crop.x + step }); break;
+          }
+          return;
+        }
+
+        // Delete key to delete cropped image
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          deleteCroppedImage(selectedCropId);
+          return;
+        }
+      }
+
       switch (e.key) {
         case 'ArrowLeft': e.preventDefault(); goToPrevious(); break;
         case 'ArrowRight': e.preventDefault(); goToNext(); break;
         case 'Escape':
           setSelectedFieldId(null);
           setSelectedStaticId(null);
+          setSelectedCropId(null);
           break;
         case 's':
         case 'S':
@@ -768,7 +861,7 @@ const Preview: React.FC<PreviewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedFieldId, selectedStaticId, fields, allStaticTexts, goToPrevious, goToNext, exportSingle, exportAll, updateField, updateStaticText, deleteStaticText, onFieldsChange, onImagesChange, onCanvasSettingsChange, zoomIn, zoomOut, zoomFit]);
+  }, [selectedFieldId, selectedStaticId, selectedCropId, fields, allStaticTexts, croppedImages, goToPrevious, goToNext, exportSingle, exportAll, updateField, updateStaticText, deleteStaticText, updateCroppedImage, deleteCroppedImage, onFieldsChange, onImagesChange, onCanvasSettingsChange, zoomIn, zoomOut, zoomFit]);
 
   if (!currentImage) {
     return (
@@ -947,6 +1040,50 @@ const Preview: React.FC<PreviewProps> = ({
                         onMouseDown={(e) => handleResizeMouseDown(e, staticText.fontSize)}
                         title="Drag to resize font"
                       />
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Cropped images from original */}
+              {croppedImages.map((crop) => {
+                const isSelected = crop.id === selectedCropId;
+
+                return (
+                  <div
+                    key={crop.id}
+                    className={`preview-crop ${isSelected ? 'selected' : ''} ${onImagesChange ? 'editable' : ''}`}
+                    style={{
+                      position: 'absolute',
+                      left: crop.x,
+                      top: crop.y,
+                      width: crop.outputWidth,
+                      height: crop.outputHeight,
+                      cursor: onImagesChange && !isResizing ? 'move' : 'default',
+                    }}
+                    onMouseDown={(e) => handleCropMouseDown(e, crop.id)}
+                  >
+                    <img
+                      src={crop.imageData}
+                      alt="Cropped"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                    {isSelected && onImagesChange && (
+                      <button
+                        className="crop-delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteCroppedImage(crop.id);
+                        }}
+                        title="刪除擷取圖片"
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
                 );

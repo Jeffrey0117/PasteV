@@ -202,6 +202,35 @@
   box-shadow: var(--shadow-sm);
 }
 
+.thumbnail-crop-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.thumbnail-wrapper:hover .thumbnail-crop-btn {
+  opacity: 1;
+}
+
+.thumbnail-crop-btn:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+}
+
 /* ==================== */
 /* Content Cell         */
 /* ==================== */
