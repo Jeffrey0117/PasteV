@@ -417,7 +417,7 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-content">
-          <div className="header-brand">
+          <div className="header-brand" onClick={reset} title="回到首頁">
             <img src="/logo.png" alt="PasteV" className="header-logo" />
             <div>
               <h1>PasteV</h1>

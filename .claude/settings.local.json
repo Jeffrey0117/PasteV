@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(start http://localhost:5173/)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(cat:*)"
+    ]
+  }
+}

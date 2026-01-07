@@ -26,6 +26,9 @@ export interface FieldTemplate {
   /** 寬度 (px)，用於文字換行 */
   width: number;
 
+  /** 高度 (px)，用於欄位框選區域 */
+  height?: number;
+
   /** 字體大小 (px) */
   fontSize: number;
 

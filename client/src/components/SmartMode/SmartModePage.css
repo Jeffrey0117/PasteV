@@ -48,6 +48,28 @@
   object-fit: contain;
 }
 
+.smart-mode-title-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.smart-mode-title-link:hover {
+  background: var(--surface-alt);
+}
+
+.smart-mode-title-link:hover .smart-mode-logo {
+  transform: scale(1.05);
+}
+
+.smart-mode-title-link:active {
+  transform: scale(0.98);
+}
+
 .btn-back {
   display: inline-flex;
   align-items: center;
@@ -426,6 +448,121 @@
   height: 100%;
 }
 
+/* 左側：圖片框選區 */
+.fields-canvas-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.fields-canvas-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0.5rem;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+}
+
+.fields-canvas {
+  position: relative;
+  flex: 1;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: crosshair;
+  background: var(--surface-alt);
+  user-select: none;
+}
+
+.fields-canvas-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* 欄位框 */
+.field-box {
+  position: absolute;
+  border: 2px solid var(--primary);
+  background: rgba(99, 102, 241, 0.15);
+  border-radius: 4px;
+  cursor: grab;
+  transition: all 0.15s ease;
+}
+
+.field-box:hover {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+.field-box.selected {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.2);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+
+.field-box.drawing {
+  border: 2px dashed var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+  pointer-events: none;
+}
+
+.field-box-label {
+  position: absolute;
+  top: -1.5rem;
+  left: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary);
+  padding: 2px 8px;
+  border-radius: 4px 4px 0 0;
+  white-space: nowrap;
+}
+
+.field-box.selected .field-box-label {
+  background: #22c55e;
+}
+
+.field-box.dragging {
+  opacity: 0.8;
+  cursor: grabbing;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+}
+
+/* 刪除按鈕 */
+.field-box-delete {
+  position: absolute;
+  top: -1.5rem;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--error);
+  color: white;
+  border: none;
+  border-radius: 4px 4px 0 0;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.field-box:hover .field-box-delete {
+  opacity: 1;
+}
+
+.field-box-delete:hover {
+  background: #dc2626;
+}
+
+/* 舊的 preview 樣式保留但不用 */
 .fields-preview {
   display: flex;
   flex-direction: column;
@@ -497,6 +634,23 @@
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.field-item:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.field-item.selected {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.field-item.selected .field-index {
+  background: #22c55e;
+  color: #fff;
 }
 
 .field-index {

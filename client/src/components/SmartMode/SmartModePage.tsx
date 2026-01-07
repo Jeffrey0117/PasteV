@@ -44,6 +44,18 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
   // 錯誤訊息
   const [error, setError] = useState<string | null>(null);
 
+  // 欄位框選狀態
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [drawEnd, setDrawEnd] = useState<{ x: number; y: number } | null>(null);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const fieldsCanvasRef = useRef<HTMLDivElement>(null);
+
+  // 拖曳欄位狀態
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragFieldId, setDragFieldId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -222,6 +234,123 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
   }, []);
 
   // ============================================
+  // 欄位框選處理
+  // ============================================
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!fieldsCanvasRef.current) return;
+
+    // 如果正在拖曳欄位，不要開始繪製
+    if (isDragging) return;
+
+    const rect = fieldsCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setIsDrawing(true);
+    setDrawStart({ x, y });
+    setDrawEnd({ x, y });
+  }, [isDragging]);
+
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!fieldsCanvasRef.current) return;
+    const rect = fieldsCanvasRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+
+    // 拖曳欄位
+    if (isDragging && dragFieldId && dragOffset) {
+      const newX = x - dragOffset.x;
+      const newY = y - dragOffset.y;
+      setFieldTemplates(prev => prev.map(f =>
+        f.id === dragFieldId ? { ...f, x: Math.round(newX), y: Math.round(newY) } : f
+      ));
+      return;
+    }
+
+    // 繪製新欄位
+    if (isDrawing) {
+      setDrawEnd({ x, y });
+    }
+  }, [isDrawing, isDragging, dragFieldId, dragOffset]);
+
+  const handleCanvasMouseUp = useCallback(() => {
+    // 結束拖曳
+    if (isDragging) {
+      setIsDragging(false);
+      setDragFieldId(null);
+      setDragOffset(null);
+      return;
+    }
+
+    // 結束繪製
+    if (!isDrawing || !drawStart || !drawEnd) {
+      setIsDrawing(false);
+      return;
+    }
+
+    const x = Math.min(drawStart.x, drawEnd.x);
+    const y = Math.min(drawStart.y, drawEnd.y);
+    const width = Math.abs(drawEnd.x - drawStart.x);
+    const height = Math.abs(drawEnd.y - drawStart.y);
+
+    // 最小尺寸檢查
+    if (width > 20 && height > 10) {
+      // 新增欄位
+      const newField = createDefaultField(`欄位 ${fieldTemplates.length + 1}`, fieldTemplates.length);
+      newField.x = Math.round(x);
+      newField.y = Math.round(y);
+      newField.width = Math.round(width);
+      newField.height = Math.round(height);
+      setFieldTemplates(prev => [...prev, newField]);
+      setSelectedFieldId(newField.id);
+    }
+
+    setIsDrawing(false);
+    setDrawStart(null);
+    setDrawEnd(null);
+  }, [isDrawing, isDragging, drawStart, drawEnd, fieldTemplates.length]);
+
+  // 開始拖曳欄位
+  const handleFieldMouseDown = useCallback((fieldId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!fieldsCanvasRef.current) return;
+
+    const field = fieldTemplates.find(f => f.id === fieldId);
+    if (!field) return;
+
+    const rect = fieldsCanvasRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    setSelectedFieldId(fieldId);
+    setIsDragging(true);
+    setDragFieldId(fieldId);
+    setDragOffset({
+      x: mouseX - field.x,
+      y: mouseY - field.y,
+    });
+  }, [fieldTemplates]);
+
+  // 刪除欄位（圖片上的刪除按鈕）
+  const handleFieldDelete = useCallback((fieldId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFieldTemplates(prev => prev.filter(f => f.id !== fieldId));
+    if (selectedFieldId === fieldId) {
+      setSelectedFieldId(null);
+    }
+  }, [selectedFieldId]);
+
+  const getDrawingRect = useCallback(() => {
+    if (!drawStart || !drawEnd) return null;
+    return {
+      left: Math.min(drawStart.x, drawEnd.x),
+      top: Math.min(drawStart.y, drawEnd.y),
+      width: Math.abs(drawEnd.x - drawStart.x),
+      height: Math.abs(drawEnd.y - drawStart.y),
+    };
+  }, [drawStart, drawEnd]);
+
+  // ============================================
   // AI 解析
   // ============================================
 
@@ -232,14 +361,15 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
     setError(null);
 
     try {
-      const response = await fetch('/api/ai-parse', {
+      const response = await fetch('/api/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fields: fieldTemplates.map(f => ({ id: f.id, name: f.name })),
           images: images.map(img => ({
             id: img.id,
-            image: img.originalImage,
+            // 使用 OCR 文字模式 (DeepSeek 可用)
+            // 如需 Vision 模式，需設定 OPENAI_API_KEY 並加入 imageData
             ocrText: img.ocrText || '',
           })),
         }),
@@ -472,11 +602,18 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
   }, [currentStep]);
 
   const handleClearAll = useCallback(() => {
+    console.log('handleClearAll called');
     setImages([]);
+    setFieldTemplates([
+      createDefaultField('帳號', 0),
+      createDefaultField('ID', 1),
+    ]);
     setCurrentStep('upload');
     setOcrProgress({ completed: 0, total: 0 });
     setError(null);
     setPreviewIndex(0);
+    setSelectedFieldId(null);
+    setActiveTab(null);
   }, []);
 
   // ============================================
@@ -516,8 +653,14 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
               ← 返回
             </button>
           )}
-          <img src="/logo.png" alt="PasteV" className="smart-mode-logo" />
-          <h1>Smart Mode - 智慧翻譯</h1>
+          <div
+            className="smart-mode-title-link"
+            onClick={handleClearAll}
+            title="回到初始狀態"
+          >
+            <img src="/logo.png" alt="PasteV" className="smart-mode-logo" />
+            <h1>Smart Mode - 智慧翻譯</h1>
+          </div>
         </div>
         <div className="smart-mode-header-right">
           {images.length > 0 && (
@@ -625,32 +768,71 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
         {currentStep === 'fields' && (
           <div className="step-fields">
             <div className="fields-layout">
-              {/* 左側：第一張圖預覽 */}
-              <div className="fields-preview">
+              {/* 左側：圖片框選區 */}
+              <div className="fields-canvas-area">
+                <div className="fields-canvas-hint">在圖片上框選欄位區域</div>
                 {images.length > 0 && (
-                  <>
+                  <div
+                    ref={fieldsCanvasRef}
+                    className="fields-canvas"
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                  >
                     <img
                       src={getImageSrc(images[0].originalImage)}
                       alt="Preview"
-                      className="fields-preview-image"
+                      className="fields-canvas-image"
+                      draggable={false}
                     />
-                    <div className="fields-preview-ocr">
-                      <h4>OCR 文字</h4>
-                      <pre>{images[0].ocrText || '(無文字)'}</pre>
-                    </div>
-                  </>
+                    {/* 已定義的欄位框 */}
+                    {fieldTemplates.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className={`field-box ${selectedFieldId === field.id ? 'selected' : ''} ${isDragging && dragFieldId === field.id ? 'dragging' : ''}`}
+                        style={{
+                          left: field.x,
+                          top: field.y,
+                          width: field.width,
+                          height: field.height || 30,
+                        }}
+                        onMouseDown={(e) => handleFieldMouseDown(field.id, e)}
+                      >
+                        <span className="field-box-label">{index + 1}. {field.name}</span>
+                        <button
+                          className="field-box-delete"
+                          onClick={(e) => handleFieldDelete(field.id, e)}
+                          title="刪除欄位"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    {/* 正在繪製的框 */}
+                    {isDrawing && drawStart && drawEnd && (
+                      <div
+                        className="field-box drawing"
+                        style={getDrawingRect() || {}}
+                      />
+                    )}
+                  </div>
                 )}
               </div>
 
               {/* 右側：欄位列表 */}
               <div className="fields-editor">
-                <h3>定義欄位</h3>
+                <h3>欄位列表</h3>
                 <p className="fields-hint">
-                  定義要從圖片中提取的欄位（如：帳號、ID、粉絲數等）
+                  在左側圖片上框選區域新增欄位，或點擊下方按鈕
                 </p>
                 <div className="fields-list">
                   {fieldTemplates.map((field, index) => (
-                    <div key={field.id} className="field-item">
+                    <div
+                      key={field.id}
+                      className={`field-item ${selectedFieldId === field.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedFieldId(field.id)}
+                    >
                       <span className="field-index">{index + 1}</span>
                       <input
                         type="text"
@@ -658,22 +840,25 @@ export function SmartModePage({ onBack }: SmartModePageProps) {
                         onChange={(e) => handleUpdateField(field.id, { name: e.target.value })}
                         placeholder="欄位名稱"
                         className="field-name-input"
+                        onClick={(e) => e.stopPropagation()}
                       />
                       <button
                         className="btn-remove-field"
-                        onClick={() => handleRemoveField(field.id)}
-                        disabled={fieldTemplates.length <= 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveField(field.id);
+                        }}
                       >
-                        x
+                        ×
                       </button>
                     </div>
                   ))}
                 </div>
                 <button className="btn-add-field" onClick={handleAddField}>
-                  + 新增欄位
+                  + 手動新增欄位
                 </button>
                 <div className="fields-summary">
-                  共 {images.length} 張圖片，將解析 {fieldTemplates.length} 個欄位
+                  共 {images.length} 張圖片，{fieldTemplates.length} 個欄位
                 </div>
               </div>
             </div>
