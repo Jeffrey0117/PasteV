@@ -29,6 +29,8 @@ export interface TableEditorProps {
   canvasSettings?: CanvasSettings;
   /** Handler for adding cropped image */
   onAddCroppedImage?: (imageId: string, croppedImage: CroppedImage) => void;
+  /** Handler for deleting cropped image */
+  onDeleteCroppedImage?: (imageId: string, cropId: string) => void;
 }
 
 /** Row data for the table */
@@ -39,6 +41,7 @@ interface RowData {
   translated: string;
   imageWidth: number;
   imageHeight: number;
+  croppedImages: CroppedImage[];
 }
 
 /**
@@ -64,6 +67,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({
   isTranslating,
   canvasSettings,
   onAddCroppedImage,
+  onDeleteCroppedImage,
 }) => {
   const tableRef = useRef<HTMLTableElement>(null);
   const cellRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -85,6 +89,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({
       translated: img.fields[activeFieldId]?.translated || '',
       imageWidth: img.width,
       imageHeight: img.height,
+      croppedImages: img.croppedImages || [],
     }));
   }, [images, activeFieldId]);
 
@@ -268,6 +273,29 @@ export const TableEditor: React.FC<TableEditorProps> = ({
                         </button>
                       )}
                     </div>
+                    {/* Cropped images list */}
+                    {row.croppedImages.length > 0 && (
+                      <div className="cropped-images-list">
+                        {row.croppedImages.map((crop, cropIndex) => (
+                          <div key={crop.id} className="cropped-image-item">
+                            <img
+                              src={crop.imageData}
+                              alt={`Crop ${cropIndex + 1}`}
+                              className="cropped-image-thumb"
+                            />
+                            {onDeleteCroppedImage && (
+                              <button
+                                className="cropped-image-delete"
+                                onClick={() => onDeleteCroppedImage(row.imageId, crop.id)}
+                                title="刪除擷取圖片"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
 
                   {/* Original Text */}

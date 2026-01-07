@@ -74,6 +74,83 @@
   text-align: center;
 }
 
+/* Background removal controls */
+.crop-bg-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  width: 100%;
+  max-width: 600px;
+}
+
+.crop-bg-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text);
+  user-select: none;
+}
+
+.crop-bg-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.crop-bg-controls .btn.small {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.crop-bg-controls .btn.small.active {
+  background: var(--primary);
+  color: white;
+}
+
+.crop-color-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.crop-tolerance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crop-tolerance label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.crop-tolerance input[type="range"] {
+  width: 100px;
+  height: 6px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 .crop-image-container {
   position: relative;
   cursor: crosshair;
@@ -81,6 +158,32 @@
   border-radius: var(--radius-sm);
   overflow: hidden;
   box-shadow: var(--shadow);
+}
+
+.crop-image-container.picking-color {
+  cursor: cell;
+}
+
+/* Preview container for step 2 */
+.crop-preview-container {
+  position: relative;
+  cursor: crosshair;
+  user-select: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  /* Checkerboard pattern for transparency */
+  background: repeating-conic-gradient(#e0e0e0 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+}
+
+.crop-preview-container img {
+  display: block;
+}
+
+.crop-hint {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.875rem;
 }
 
 .crop-image-container img {

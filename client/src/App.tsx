@@ -291,6 +291,23 @@ function App() {
     []
   );
 
+  // Delete cropped image handler for TableEditor
+  const handleDeleteCroppedImage = useCallback(
+    (imageId: string, cropId: string) => {
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === imageId
+            ? {
+                ...img,
+                croppedImages: (img.croppedImages || []).filter((c) => c.id !== cropId),
+              }
+            : img
+        )
+      );
+    },
+    []
+  );
+
   // Translate single field
   const handleTranslateField = useCallback(
     async (fieldId: string) => {
@@ -588,6 +605,7 @@ function App() {
               isTranslating={isTranslating}
               canvasSettings={canvasSettings}
               onAddCroppedImage={handleAddCroppedImage}
+              onDeleteCroppedImage={handleDeleteCroppedImage}
             />
             <div className="step-actions">
               <button onClick={() => goToStep('fields')} className="btn secondary">
