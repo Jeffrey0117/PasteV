@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
 import type { ImageData, FieldTemplate, CanvasSettings, StaticText, SavedTemplate, SavedProject, CroppedImage } from '../../types';
+import { ImageCropModal } from '../TableEditor';
 import ExportButton from './ExportButton';
 import './Preview.css';
 
@@ -61,6 +62,9 @@ const Preview: React.FC<PreviewProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeType, setResizeType] = useState<'font' | 'width-left' | 'width-right' | null>(null);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, fontSize: 16, width: 0, fieldX: 0 });
+
+  // Crop modal state
+  const [showCropModal, setShowCropModal] = useState(false);
 
   const currentImage = images[currentIndex];
   // Per-image static texts
@@ -875,6 +879,7 @@ const Preview: React.FC<PreviewProps> = ({
   }
 
   return (
+    <>
     <div className="preview-wrapper">
       {/* Top toolbar */}
       <div className="preview-toolbar">
@@ -1288,6 +1293,38 @@ const Preview: React.FC<PreviewProps> = ({
             </div>
           )}
 
+          {/* Cropped Images (from original) */}
+          {onImagesChange && (
+            <div className="sidebar-section">
+              <h3>擷取圖片 <span className="section-badge per-image">#{currentIndex + 1}</span></h3>
+              <button className="add-text-btn" onClick={() => setShowCropModal(true)}>
+                + 從原圖擷取
+              </button>
+              {croppedImages.length > 0 && (
+                <div className="cropped-image-grid">
+                  {croppedImages.map((crop) => (
+                    <div
+                      key={crop.id}
+                      className={`cropped-image-grid-item ${crop.id === selectedCropId ? 'selected' : ''}`}
+                      onClick={() => selectCrop(crop.id)}
+                    >
+                      <img src={crop.imageData} alt="Cropped" />
+                      <button
+                        className="cropped-image-grid-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteCroppedImage(crop.id);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Selected Static Text Settings */}
           {selectedStatic && (isSelectedTemplate ? onCanvasSettingsChange : onImagesChange) && (
             <div className="sidebar-section field-settings">
@@ -1659,6 +1696,28 @@ const Preview: React.FC<PreviewProps> = ({
         </div>
       </div>
     </div>
+
+    {/* Image Crop Modal */}
+    {showCropModal && currentImage && onImagesChange && (
+      <ImageCropModal
+        imageData={currentImage.originalImage}
+        imageWidth={currentImage.width}
+        imageHeight={currentImage.height}
+        canvasWidth={canvasSettings.width}
+        canvasHeight={canvasSettings.height}
+        onClose={() => setShowCropModal(false)}
+        onConfirm={(croppedImage) => {
+          const updatedCrops = [...(currentImage.croppedImages || []), croppedImage];
+          onImagesChange(
+            images.map((img) =>
+              img.id === currentImage.id ? { ...img, croppedImages: updatedCrops } : img
+            )
+          );
+          setShowCropModal(false);
+        }}
+      />
+    )}
+    </>
   );
 };
 

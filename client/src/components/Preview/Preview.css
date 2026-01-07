@@ -359,6 +359,70 @@
   background: #dc2626;
 }
 
+/* Cropped image grid in sidebar */
+.cropped-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 0.75rem;
+}
+
+.cropped-image-grid-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  background: repeating-conic-gradient(#e0e0e0 0% 25%, #fff 0% 50%) 50% / 10px 10px;
+}
+
+.cropped-image-grid-item:hover {
+  border-color: var(--border);
+  transform: scale(1.02);
+}
+
+.cropped-image-grid-item.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.cropped-image-grid-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cropped-image-grid-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--error, #ef4444);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.cropped-image-grid-item:hover .cropped-image-grid-delete {
+  opacity: 1;
+}
+
+.cropped-image-grid-delete:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
 /* Sidebar - right panel */
 .preview-sidebar {
   width: 420px;
