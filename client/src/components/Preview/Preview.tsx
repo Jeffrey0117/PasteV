@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
-import JSZip from 'jszip';
 import type { ImageData, FieldTemplate, CanvasSettings, StaticText, SavedTemplate, SavedProject, CroppedImage } from '../../types';
 import { ImageCropModal } from '../TableEditor';
 import ExportButton from './ExportButton';
@@ -683,8 +682,10 @@ const Preview: React.FC<PreviewProps> = ({
   const exportSingle = useCallback(async () => {
     if (!canvasRef.current || exporting) return;
 
+    // Clear all selections to prevent borders from being rendered
     setSelectedFieldId(null);
     setSelectedStaticId(null);
+    setSelectedCropId(null);
     const originalZoom = zoom;
     setZoom(1);
     await new Promise((r) => setTimeout(r, 50));
@@ -711,12 +712,14 @@ const Preview: React.FC<PreviewProps> = ({
     }
   }, [canvasSettings.backgroundColor, currentIndex, exporting, zoom]);
 
-  // Export all images as ZIP
+  // Export all images as individual files
   const exportAll = useCallback(async () => {
     if (exporting) return;
 
+    // Clear all selections to prevent borders from being rendered
     setSelectedFieldId(null);
     setSelectedStaticId(null);
+    setSelectedCropId(null);
     const originalZoom = zoom;
     setZoom(1);
     await new Promise((r) => setTimeout(r, 50));
@@ -727,11 +730,9 @@ const Preview: React.FC<PreviewProps> = ({
     const originalIndex = currentIndex;
 
     try {
-      const zip = new JSZip();
-      const folder = zip.folder('pastev-export');
-
+      // Export each image as individual file
       for (let i = 0; i < images.length; i++) {
-        setExportProgress(Math.round((i / images.length) * 100));
+        setExportProgress(Math.round(((i + 1) / images.length) * 100));
         onIndexChange(i);
         await new Promise((resolve) => setTimeout(resolve, 150));
 
@@ -743,22 +744,16 @@ const Preview: React.FC<PreviewProps> = ({
           useCORS: true,
         });
 
-        const blob = await new Promise<Blob>((resolve) => {
-          canvas.toBlob((b) => resolve(b!), 'image/png');
-        });
+        // Download individual file
+        const link = document.createElement('a');
+        link.download = `pastev-${String(i + 1).padStart(2, '0')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
 
-        folder?.file(`image-${String(i + 1).padStart(2, '0')}.png`, blob);
+        // Small delay between downloads to prevent browser blocking
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      setExportProgress(100);
-      const content = await zip.generateAsync({ type: 'blob' });
-
-      const link = document.createElement('a');
-      link.download = `pastev-export-${Date.now()}.zip`;
-      link.href = URL.createObjectURL(content);
-      link.click();
-
-      URL.revokeObjectURL(link.href);
       onIndexChange(originalIndex);
     } catch (error) {
       console.error('Export all failed:', error);
@@ -871,8 +866,8 @@ const Preview: React.FC<PreviewProps> = ({
     return (
       <div className="preview-wrapper">
         <div className="preview-empty">
-          <p>No images to preview</p>
-          <button className="btn-secondary" onClick={onBack}>Back to Edit</button>
+          <p>沒有可預覽的圖片</p>
+          <button className="btn-secondary" onClick={onBack}>返回編輯</button>
         </div>
       </div>
     );
@@ -884,9 +879,9 @@ const Preview: React.FC<PreviewProps> = ({
       {/* Top toolbar */}
       <div className="preview-toolbar">
         <div className="toolbar-left">
-          <h2>Preview</h2>
+          <h2>預覽</h2>
           {onFieldsChange && (
-            <span className="edit-hint">Click to select, drag to move</span>
+            <span className="edit-hint">點擊選取，拖曳移動</span>
           )}
         </div>
 
@@ -909,7 +904,7 @@ const Preview: React.FC<PreviewProps> = ({
         <div className="toolbar-right">
           <div className="zoom-controls">
             <button className="zoom-btn" onClick={zoomOut} disabled={zoom <= 0.1}>-</button>
-            <span className="zoom-level" onClick={zoomFit} title="Click to fit">
+            <span className="zoom-level" onClick={zoomFit} title="點擊自動適應">
               {Math.round(zoom * 100)}%
             </span>
             <button className="zoom-btn" onClick={zoomIn} disabled={zoom >= 3}>+</button>
@@ -1043,7 +1038,7 @@ const Preview: React.FC<PreviewProps> = ({
                       <div
                         className="resize-handle resize-handle-se"
                         onMouseDown={(e) => handleResizeMouseDown(e, staticText.fontSize)}
-                        title="Drag to resize font"
+                        title="拖曳調整字體大小"
                       />
                     )}
                   </div>
@@ -1101,7 +1096,7 @@ const Preview: React.FC<PreviewProps> = ({
         <div className="preview-sidebar">
           {/* Original thumbnail */}
           <div className="sidebar-section">
-            <h3>Original</h3>
+            <h3>原圖</h3>
             <div className="original-thumbnail">
               <img src={currentImage.originalImage} alt={`Original ${currentIndex + 1}`} />
             </div>
@@ -1110,10 +1105,10 @@ const Preview: React.FC<PreviewProps> = ({
           {/* Canvas Settings */}
           {onCanvasSettingsChange && (
             <div className="sidebar-section">
-              <h3>Canvas Settings</h3>
+              <h3>畫布設定</h3>
               <div className="field-settings">
                 <div className="setting-row">
-                  <label>Width</label>
+                  <label>寬度</label>
                   <input
                     type="number"
                     value={canvasSettings.width}
@@ -1121,7 +1116,7 @@ const Preview: React.FC<PreviewProps> = ({
                   />
                 </div>
                 <div className="setting-row">
-                  <label>Height</label>
+                  <label>高度</label>
                   <input
                     type="number"
                     value={canvasSettings.height}
@@ -1129,7 +1124,7 @@ const Preview: React.FC<PreviewProps> = ({
                   />
                 </div>
                 <div className="setting-row">
-                  <label>Bg Color</label>
+                  <label>背景色</label>
                   <input
                     type="color"
                     value={canvasSettings.backgroundColor}
@@ -1137,7 +1132,7 @@ const Preview: React.FC<PreviewProps> = ({
                   />
                 </div>
                 <div className="setting-row">
-                  <label>Bg Image</label>
+                  <label>背景圖</label>
                   <input
                     type="file"
                     accept="image/*"
@@ -1161,7 +1156,7 @@ const Preview: React.FC<PreviewProps> = ({
                 {canvasSettings.backgroundImage && (
                   <>
                     <div className="setting-row">
-                      <label>Bg Opacity</label>
+                      <label>透明度</label>
                       <input
                         type="range"
                         min="0"
@@ -1185,7 +1180,7 @@ const Preview: React.FC<PreviewProps> = ({
                           backgroundImageOpacity: undefined,
                         })}
                       >
-                        Remove Background Image
+                        移除背景圖
                       </button>
                     </div>
                   </>
@@ -1197,9 +1192,9 @@ const Preview: React.FC<PreviewProps> = ({
           {/* Template Static Texts (applies to all images) */}
           {onCanvasSettingsChange && (
             <div className="sidebar-section">
-              <h3>Template Texts <span className="section-badge template">All</span></h3>
+              <h3>模板文字 <span className="section-badge template">全部</span></h3>
               <button className="add-text-btn" onClick={addTemplateStaticText}>
-                + Add Template Text
+                + 新增模板文字
               </button>
               {templateStaticTexts.length > 0 && (
                 <div className="static-text-list">
@@ -1226,11 +1221,11 @@ const Preview: React.FC<PreviewProps> = ({
 
               {/* Save/Load Template */}
               <div className="template-actions">
-                <button className="btn-template-action save" onClick={saveTemplate} title="Save all settings to file">
-                  Save Template
+                <button className="btn-template-action save" onClick={saveTemplate} title="將所有設定儲存至檔案">
+                  儲存模板
                 </button>
-                <label className="btn-template-action load" title="Load settings from file">
-                  Load Template
+                <label className="btn-template-action load" title="從檔案載入設定">
+                  載入模板
                   <input
                     type="file"
                     accept=".json"
@@ -1242,13 +1237,13 @@ const Preview: React.FC<PreviewProps> = ({
 
               {/* Save/Load Project */}
               <div className="project-actions">
-                <span className="project-actions-label">Project</span>
+                <span className="project-actions-label">專案</span>
                 <div className="project-actions-buttons">
-                  <button className="btn-project-action save" onClick={saveProject} title="Save entire project with all images">
-                    Save Project
+                  <button className="btn-project-action save" onClick={saveProject} title="儲存包含所有圖片的專案">
+                    儲存專案
                   </button>
-                  <label className="btn-project-action load" title="Load project from file">
-                    Load Project
+                  <label className="btn-project-action load" title="從檔案載入專案">
+                    載入專案
                     <input
                       type="file"
                       accept=".json"
@@ -1264,9 +1259,9 @@ const Preview: React.FC<PreviewProps> = ({
           {/* Per-Image Static Texts (only for current image) */}
           {onImagesChange && (
             <div className="sidebar-section">
-              <h3>Image Texts <span className="section-badge per-image">#{currentIndex + 1}</span></h3>
+              <h3>圖片文字 <span className="section-badge per-image">#{currentIndex + 1}</span></h3>
               <button className="add-text-btn" onClick={addImageStaticText}>
-                + Add Text (This Image)
+                + 新增文字 (此圖)
               </button>
               {imageStaticTexts.length > 0 && (
                 <div className="static-text-list">
@@ -1328,10 +1323,10 @@ const Preview: React.FC<PreviewProps> = ({
           {/* Selected Static Text Settings */}
           {selectedStatic && (isSelectedTemplate ? onCanvasSettingsChange : onImagesChange) && (
             <div className="sidebar-section field-settings">
-              <h3>Text Settings <span className={`section-badge ${isSelectedTemplate ? 'template' : 'per-image'}`}>{isSelectedTemplate ? 'Template' : 'Image'}</span></h3>
+              <h3>文字設定 <span className={`section-badge ${isSelectedTemplate ? 'template' : 'per-image'}`}>{isSelectedTemplate ? '模板' : '圖片'}</span></h3>
 
               <div className="setting-row">
-                <label>Text</label>
+                <label>文字</label>
                 <input
                   type="text"
                   value={selectedStatic.text}
@@ -1359,7 +1354,7 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Font Size</label>
+                <label>字型大小</label>
                 <input
                   type="number"
                   value={selectedStatic.fontSize}
@@ -1370,23 +1365,23 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Weight</label>
+                <label>粗細</label>
                 <select
                   value={selectedStatic.fontWeight}
                   onChange={(e) => updateStaticText(selectedStatic.id, { fontWeight: e.target.value as StaticText['fontWeight'] })}
                 >
-                  <option value="normal">Normal</option>
-                  <option value="bold">Bold</option>
-                  <option value="300">Light</option>
-                  <option value="500">Medium</option>
-                  <option value="600">Semi Bold</option>
-                  <option value="700">Bold</option>
-                  <option value="800">Extra Bold</option>
+                  <option value="normal">正常</option>
+                  <option value="bold">粗體</option>
+                  <option value="300">細</option>
+                  <option value="500">中等</option>
+                  <option value="600">半粗</option>
+                  <option value="700">粗</option>
+                  <option value="800">特粗</option>
                 </select>
               </div>
 
               <div className="setting-row">
-                <label>Color</label>
+                <label>顏色</label>
                 <input
                   type="color"
                   value={selectedStatic.color}
@@ -1395,7 +1390,7 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Opacity</label>
+                <label>透明度</label>
                 <input
                   type="range"
                   min="0"
@@ -1408,7 +1403,7 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Rotation</label>
+                <label>旋轉</label>
                 <input
                   type="number"
                   value={selectedStatic.rotation || 0}
@@ -1425,14 +1420,14 @@ const Preview: React.FC<PreviewProps> = ({
                     onClick={() => convertStaticText(selectedStatic.id)}
                     title={isSelectedTemplate ? '轉換為圖片專屬文字' : '轉換為模板文字 (套用至所有圖片)'}
                   >
-                    {isSelectedTemplate ? '→ 轉為 Image Text' : '→ 轉為 Template Text'}
+                    {isSelectedTemplate ? '→ 轉為圖片文字' : '→ 轉為模板文字'}
                   </button>
                 </div>
               )}
 
               <p className="setting-hint">
-                Arrow: move 1px | Shift+Arrow: 10px<br />
-                Delete: remove text
+                方向鍵: 移動 1px | Shift+方向鍵: 10px<br />
+                Delete: 刪除文字
               </p>
             </div>
           )}
@@ -1461,7 +1456,7 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Width</label>
+                <label>寬度</label>
                 <input
                   type="number"
                   value={selectedField.width}
@@ -1470,7 +1465,7 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Font Size</label>
+                <label>字型大小</label>
                 <input
                   type="number"
                   value={selectedField.fontSize}
@@ -1481,23 +1476,23 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Weight</label>
+                <label>粗細</label>
                 <select
                   value={selectedField.fontWeight}
                   onChange={(e) => updateField(selectedField.id, { fontWeight: e.target.value as FieldTemplate['fontWeight'] })}
                 >
-                  <option value="normal">Normal</option>
-                  <option value="bold">Bold</option>
-                  <option value="300">Light</option>
-                  <option value="500">Medium</option>
-                  <option value="600">Semi Bold</option>
-                  <option value="700">Bold</option>
-                  <option value="800">Extra Bold</option>
+                  <option value="normal">正常</option>
+                  <option value="bold">粗體</option>
+                  <option value="300">細</option>
+                  <option value="500">中等</option>
+                  <option value="600">半粗</option>
+                  <option value="700">粗</option>
+                  <option value="800">特粗</option>
                 </select>
               </div>
 
               <div className="setting-row">
-                <label>Color</label>
+                <label>顏色</label>
                 <input
                   type="color"
                   value={selectedField.color}
@@ -1506,7 +1501,7 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Align</label>
+                <label>對齊</label>
                 <div className="align-buttons">
                   <button
                     className={selectedField.textAlign === 'left' ? 'active' : ''}
@@ -1524,7 +1519,7 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <div className="setting-row">
-                <label>Display</label>
+                <label>顯示</label>
                 <div className="align-buttons">
                   <button
                     className={selectedField.displayMode !== 'original' ? 'active' : ''}
@@ -1540,8 +1535,8 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <p className="setting-hint">
-                Arrow: move 1px | Shift+Arrow: 10px<br />
-                Drag corner: resize font
+                方向鍵: 移動 1px | Shift+方向鍵: 10px<br />
+                拖曳角落: 調整字體大小
               </p>
             </div>
           )}
@@ -1635,8 +1630,8 @@ const Preview: React.FC<PreviewProps> = ({
               </div>
 
               <p className="setting-hint">
-                Arrow: move 1px | Shift+Arrow: 10px<br />
-                Delete: remove image
+                方向鍵: 移動 1px | Shift+方向鍵: 10px<br />
+                Delete: 刪除圖片
               </p>
             </div>
           )}
@@ -1644,7 +1639,7 @@ const Preview: React.FC<PreviewProps> = ({
           {/* Field preview list */}
           {!selectedField && !selectedStatic && !selectedCrop && (
             <div className="sidebar-section">
-              <h3>Fields</h3>
+              <h3>欄位</h3>
               <div className="field-preview-list">
                 {fields.map((field) => {
                   const content = currentImage.fields[field.id];
@@ -1663,7 +1658,7 @@ const Preview: React.FC<PreviewProps> = ({
                         </span>
                       </div>
                       <span className="field-preview-content">
-                        {displayText || <em className="no-content">(empty)</em>}
+                        {displayText || <em className="no-content">(空)</em>}
                       </span>
                     </div>
                   );
@@ -1677,7 +1672,7 @@ const Preview: React.FC<PreviewProps> = ({
       {/* Footer actions */}
       <div className="preview-actions">
         <button className="btn-back" onClick={onBack}>
-          &#8592; Back
+          &#8592; 返回
         </button>
 
         <div className="export-buttons">

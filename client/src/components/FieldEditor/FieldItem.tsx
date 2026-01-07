@@ -9,6 +9,7 @@ interface FieldItemProps {
   onResize: (width: number) => void;
   onUpdate: (updates: Partial<FieldTemplate>) => void;
   canvasBounds: { width: number; height: number };
+  zoom?: number;
 }
 
 type ResizeType = 'left' | 'right' | 'corner' | null;
@@ -24,6 +25,7 @@ export function FieldItem({
   onResize,
   onUpdate,
   canvasBounds,
+  zoom = 1,
 }: FieldItemProps) {
   const itemRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -125,8 +127,9 @@ export function FieldItem({
       if (!canvas) return;
 
       const canvasRect = canvas.getBoundingClientRect();
-      const x = e.clientX - canvasRect.left - dragOffset.current.x;
-      const y = e.clientY - canvasRect.top - dragOffset.current.y;
+      // Account for zoom when calculating position
+      const x = (e.clientX - canvasRect.left) / zoom - dragOffset.current.x;
+      const y = (e.clientY - canvasRect.top) / zoom - dragOffset.current.y;
 
       // Bound within canvas
       const boundedX = Math.max(0, Math.min(x, canvasBounds.width - 50));
@@ -146,15 +149,16 @@ export function FieldItem({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, onDrag, canvasBounds]);
+  }, [isDragging, onDrag, canvasBounds, zoom]);
 
   // Handle resize move
   useEffect(() => {
     if (!resizeType) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - resizeStart.current.x;
-      const deltaY = e.clientY - resizeStart.current.y;
+      // Account for zoom when calculating deltas
+      const deltaX = (e.clientX - resizeStart.current.x) / zoom;
+      const deltaY = (e.clientY - resizeStart.current.y) / zoom;
 
       if (resizeType === 'right') {
         // Right handle: adjust width only
@@ -189,7 +193,7 @@ export function FieldItem({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizeType, onResize, onUpdate, canvasBounds.width, field.x]);
+  }, [resizeType, onResize, onUpdate, canvasBounds.width, field.x, zoom]);
 
   const isResizing = resizeType !== null;
 
@@ -213,7 +217,7 @@ export function FieldItem({
 
       {/* Preview text */}
       <div className="field-preview-text" style={{ lineHeight: field.lineHeight || 1.4 }}>
-        Sample Text
+        範例文字
       </div>
 
       {/* Resize handles - only show when selected */}

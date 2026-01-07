@@ -36,15 +36,15 @@ const ExportButton: React.FC<ExportButtonProps> = ({
   const getButtonText = () => {
     if (loading) {
       if (isSingle) {
-        return 'Exporting...';
+        return '輸出中...';
       }
-      return `Exporting... ${progress}%`;
+      return `輸出中... ${progress}%`;
     }
 
     if (isSingle) {
-      return 'Export This';
+      return '輸出此張';
     }
-    return `Export All (${count})`;
+    return `輸出全部 (${count})`;
   };
 
   const getShortcutHint = () => {

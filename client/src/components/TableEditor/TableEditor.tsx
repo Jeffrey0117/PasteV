@@ -217,11 +217,11 @@ export const TableEditor: React.FC<TableEditorProps> = ({
       {/* Field Header */}
       <div className="table-editor-header">
         <div className="field-info">
-          <span className="field-label">Current field:</span>
-          <span className="field-name">{activeField?.name || 'Unknown'}</span>
+          <span className="field-label">目前欄位：</span>
+          <span className="field-name">{activeField?.name || '未知'}</span>
           {untranslatedCount > 0 && (
             <span className="untranslated-badge">
-              {untranslatedCount} untranslated
+              {untranslatedCount} 個未翻譯
             </span>
           )}
         </div>
@@ -230,7 +230,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({
           onClick={handleTranslateField}
           disabled={isTranslating || untranslatedCount === 0}
         >
-          {isTranslating ? 'Translating...' : 'Translate This Field'}
+          {isTranslating ? '翻譯中...' : '翻譯此欄位'}
         </button>
       </div>
 
@@ -239,16 +239,16 @@ export const TableEditor: React.FC<TableEditorProps> = ({
         <table className="data-table" ref={tableRef}>
           <thead>
             <tr>
-              <th className="thumbnail-header">Image</th>
-              <th className="content-header">Original</th>
-              <th className="content-header">Translation</th>
+              <th className="thumbnail-header">圖片</th>
+              <th className="content-header">原文</th>
+              <th className="content-header">翻譯</th>
             </tr>
           </thead>
           <tbody>
             {tableData.length === 0 ? (
               <tr>
                 <td colSpan={3} className="empty-row">
-                  No images to display
+                  沒有圖片可顯示
                 </td>
               </tr>
             ) : (
@@ -306,7 +306,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({
                     <EditableCell
                       value={row.original}
                       onChange={(value) => handleCellChange(row.imageId, 'original', value)}
-                      placeholder="Enter original text..."
+                      placeholder="輸入原文..."
                       multiline={true}
                       rowIndex={rowIndex}
                       columnType="original"
@@ -322,7 +322,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({
                     <EditableCell
                       value={row.translated}
                       onChange={(value) => handleCellChange(row.imageId, 'translated', value)}
-                      placeholder="Enter translation..."
+                      placeholder="輸入翻譯..."
                       multiline={true}
                       rowIndex={rowIndex}
                       columnType="translated"
@@ -346,16 +346,16 @@ export const TableEditor: React.FC<TableEditorProps> = ({
           {isTranslating ? (
             <>
               <span className="spinner-small"></span>
-              Translating...
+              翻譯中...
             </>
           ) : (
-            `Translate All Fields (${totalUntranslated})`
+            `翻譯全部欄位 (${totalUntranslated})`
           )}
         </button>
 
         <div className="keyboard-hints">
-          <span className="hint">Tab: Next cell</span>
-          <span className="hint">Ctrl+Shift+T: Translate field</span>
+          <span className="hint">Tab：下一格</span>
+          <span className="hint">Ctrl+Shift+T：翻譯欄位</span>
         </div>
       </div>
 

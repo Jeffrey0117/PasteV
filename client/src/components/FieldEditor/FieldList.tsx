@@ -71,8 +71,9 @@ export function FieldList({
 
   // Format field info text
   const formatFieldInfo = (field: FieldTemplate) => {
-    const weight = field.fontWeight === 'bold' || Number(field.fontWeight) >= 600 ? 'Bold' : 'Normal';
-    return `${field.fontSize}px ${weight} | ${field.textAlign}`;
+    const weight = field.fontWeight === 'bold' || Number(field.fontWeight) >= 600 ? '粗體' : '正常';
+    const alignMap: Record<string, string> = { left: '左', center: '中', right: '右' };
+    return `${field.fontSize}px ${weight} | ${alignMap[field.textAlign] || field.textAlign}`;
   };
 
   return (
@@ -94,7 +95,7 @@ export function FieldList({
           onDragEnd={handleDragEnd}
         >
           {/* Drag handle */}
-          <div className="field-list-item-drag-handle" title="Drag to reorder">
+          <div className="field-list-item-drag-handle" title="拖曳以重新排序">
             &#x2630;
           </div>
 
@@ -113,7 +114,7 @@ export function FieldList({
               e.stopPropagation();
               onDeleteField(field.id);
             }}
-            title="Delete field"
+            title="刪除欄位"
           >
             &times;
           </button>
@@ -122,7 +123,7 @@ export function FieldList({
 
       {/* Add field button */}
       <button className="field-list-add-btn" onClick={onAddField}>
-        + Add Field
+        + 新增欄位
       </button>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { FieldTemplate, ImageData, CanvasSettings } from '../../types';
 import { generateId } from '../../types';
 import { FieldItem } from './FieldItem';
@@ -37,18 +37,71 @@ export function FieldEditor({
   canvasSettings,
 }: FieldEditorProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [autoFitZoom, setAutoFitZoom] = useState(1);
+
+  // Calculate auto-fit zoom when wrapper size or canvas size changes
+  useEffect(() => {
+    const calculateAutoFit = () => {
+      if (!wrapperRef.current) return;
+      const wrapperRect = wrapperRef.current.getBoundingClientRect();
+      const availableWidth = wrapperRect.width - 32; // padding
+      const availableHeight = wrapperRect.height - 32;
+
+      const scaleX = availableWidth / canvasSettings.width;
+      const scaleY = availableHeight / canvasSettings.height;
+      const fitZoom = Math.min(scaleX, scaleY, 1); // Don't go above 100%
+
+      setAutoFitZoom(Math.max(0.1, fitZoom));
+      setZoom(Math.max(0.1, fitZoom));
+    };
+
+    calculateAutoFit();
+    window.addEventListener('resize', calculateAutoFit);
+    return () => window.removeEventListener('resize', calculateAutoFit);
+  }, [canvasSettings.width, canvasSettings.height]);
+
+  // Clamp field positions when canvas size changes or fields go outside bounds
+  useEffect(() => {
+    const clampedFields = fields.map((field) => {
+      const maxX = Math.max(0, canvasSettings.width - 50);
+      const maxY = Math.max(0, canvasSettings.height - 30);
+      const clampedX = Math.max(0, Math.min(field.x, maxX));
+      const clampedY = Math.max(0, Math.min(field.y, maxY));
+
+      if (field.x !== clampedX || field.y !== clampedY) {
+        return { ...field, x: clampedX, y: clampedY };
+      }
+      return field;
+    });
+
+    // Only update if any field was clamped
+    const needsUpdate = clampedFields.some((f, i) =>
+      f.x !== fields[i].x || f.y !== fields[i].y
+    );
+
+    if (needsUpdate) {
+      onFieldsChange(clampedFields);
+    }
+  }, [canvasSettings.width, canvasSettings.height, fields, onFieldsChange]);
 
   // Get selected field
   const selectedField = fields.find((f) => f.id === selectedFieldId) || null;
 
   // Handle add new field
   const handleAddField = useCallback(() => {
+    // Calculate position ensuring it stays within canvas bounds
+    const baseY = 50 + fields.length * 80;
+    const maxX = Math.max(0, canvasSettings.width - 300 - 50); // width of field + padding
+    const maxY = Math.max(0, canvasSettings.height - 30);
+
     const newField: FieldTemplate = {
       id: generateId('field'),
-      name: `Field ${fields.length + 1}`,
-      x: 50,
-      y: 50 + fields.length * 60,
-      width: 300,
+      name: `欄位 ${fields.length + 1}`,
+      x: Math.min(50, maxX),
+      y: Math.min(baseY, maxY),
+      width: Math.min(300, canvasSettings.width - 50),
       fontSize: 20,
       fontWeight: 'normal',
       color: '#ffffff',
@@ -57,7 +110,7 @@ export function FieldEditor({
 
     onFieldsChange([...fields, newField]);
     onSelectField(newField.id);
-  }, [fields, onFieldsChange, onSelectField]);
+  }, [fields, onFieldsChange, onSelectField, canvasSettings.width, canvasSettings.height]);
 
   // Handle delete field
   const handleDeleteField = useCallback(
@@ -84,9 +137,12 @@ export function FieldEditor({
   // Handle field drag (position change)
   const handleFieldDrag = useCallback(
     (fieldId: string, x: number, y: number) => {
-      onFieldsChange(fields.map((f) => (f.id === fieldId ? { ...f, x, y } : f)));
+      // Clamp position within canvas bounds
+      const clampedX = Math.max(0, Math.min(x, canvasSettings.width - 50));
+      const clampedY = Math.max(0, Math.min(y, canvasSettings.height - 30));
+      onFieldsChange(fields.map((f) => (f.id === fieldId ? { ...f, x: clampedX, y: clampedY } : f)));
     },
-    [fields, onFieldsChange]
+    [fields, onFieldsChange, canvasSettings.width, canvasSettings.height]
   );
 
   // Handle field resize (width change)
@@ -100,9 +156,17 @@ export function FieldEditor({
   // Handle field style update
   const handleFieldUpdate = useCallback(
     (fieldId: string, updates: Partial<FieldTemplate>) => {
-      onFieldsChange(fields.map((f) => (f.id === fieldId ? { ...f, ...updates } : f)));
+      // Clamp position values if they're being updated
+      const clampedUpdates = { ...updates };
+      if (clampedUpdates.x !== undefined) {
+        clampedUpdates.x = Math.max(0, Math.min(clampedUpdates.x, canvasSettings.width - 50));
+      }
+      if (clampedUpdates.y !== undefined) {
+        clampedUpdates.y = Math.max(0, Math.min(clampedUpdates.y, canvasSettings.height - 30));
+      }
+      onFieldsChange(fields.map((f) => (f.id === fieldId ? { ...f, ...clampedUpdates } : f)));
     },
-    [fields, onFieldsChange]
+    [fields, onFieldsChange, canvasSettings.width, canvasSettings.height]
   );
 
   // Handle canvas click (deselect)
@@ -114,6 +178,11 @@ export function FieldEditor({
     },
     [onSelectField]
   );
+
+  // Zoom controls - allow down to 10% for very large canvases
+  const zoomIn = useCallback(() => setZoom((z) => Math.min(2, z + 0.1)), []);
+  const zoomOut = useCallback(() => setZoom((z) => Math.max(0.1, z - 0.1)), []);
+  const zoomFit = useCallback(() => setZoom(autoFitZoom), [autoFitZoom]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -209,27 +278,57 @@ export function FieldEditor({
       {/* Canvas Area */}
       <div className="field-editor-canvas-area">
         <div className="field-editor-canvas-header">
-          <h3>Field Definition</h3>
-          <span className="field-editor-canvas-hint">
-            Click and drag to position fields
-          </span>
+          <h3>欄位定義</h3>
+          <div className="canvas-zoom-controls">
+            <button className="zoom-btn" onClick={zoomOut} disabled={zoom <= 0.1}>-</button>
+            <span className="zoom-level" onClick={zoomFit} title="點擊重設縮放">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button className="zoom-btn" onClick={zoomIn} disabled={zoom >= 2}>+</button>
+          </div>
         </div>
+        <span className="field-editor-canvas-hint">
+          點擊拖曳調整欄位位置
+        </span>
 
-        <div className="field-editor-canvas-wrapper">
+        <div className="field-editor-canvas-wrapper" ref={wrapperRef}>
           <div
-            ref={canvasRef}
-            className="field-editor-canvas"
+            className="field-editor-canvas-zoom-wrapper"
             style={{
-              width: canvasSettings.width,
-              height: canvasSettings.height,
-              backgroundImage: image?.originalImage
-                ? `url(${image.originalImage})`
-                : undefined,
-              backgroundColor: canvasSettings.backgroundColor,
+              transform: `scale(${zoom})`,
+              transformOrigin: 'center center',
             }}
-            onClick={handleCanvasClick}
           >
-            {fields.map((field) => (
+            <div
+              ref={canvasRef}
+              className="field-editor-canvas"
+              style={{
+                width: canvasSettings.width,
+                height: canvasSettings.height,
+                backgroundColor: canvasSettings.backgroundColor,
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onClick={handleCanvasClick}
+            >
+              {/* Background image */}
+              {image?.originalImage && (
+                <img
+                  src={image.originalImage}
+                  alt="Background"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    pointerEvents: 'none',
+                    zIndex: 0,
+                  }}
+                />
+              )}
+              {fields.map((field) => (
               <FieldItem
                 key={field.id}
                 field={field}
@@ -242,8 +341,10 @@ export function FieldEditor({
                   width: canvasSettings.width,
                   height: canvasSettings.height,
                 }}
+                zoom={zoom}
               />
             ))}
+            </div>
           </div>
         </div>
       </div>
@@ -251,7 +352,7 @@ export function FieldEditor({
       {/* Side Panel */}
       <div className="field-editor-panel">
         {/* Field List Section */}
-        <h3>Fields</h3>
+        <h3>欄位列表</h3>
         <FieldList
           fields={fields}
           selectedFieldId={selectedFieldId}
@@ -262,12 +363,12 @@ export function FieldEditor({
         />
 
         {/* Field Settings Section */}
-        <h3>Selected Field Settings</h3>
+        <h3>欄位設定</h3>
         {selectedField ? (
           <div className="field-settings">
             {/* Name */}
             <div className="field-settings-row">
-              <label>Name</label>
+              <label>名稱</label>
               <input
                 type="text"
                 value={selectedField.name}
@@ -299,7 +400,7 @@ export function FieldEditor({
 
             {/* Width */}
             <div className="field-settings-row">
-              <label>Width</label>
+              <label>寬度</label>
               <input
                 type="number"
                 value={selectedField.width}
@@ -311,7 +412,7 @@ export function FieldEditor({
 
             {/* Font Size */}
             <div className="field-settings-row">
-              <label>Size</label>
+              <label>字型大小</label>
               <input
                 type="number"
                 value={selectedField.fontSize}
@@ -324,7 +425,7 @@ export function FieldEditor({
 
             {/* Font Weight */}
             <div className="field-settings-row">
-              <label>Weight</label>
+              <label>粗細</label>
               <select
                 value={selectedField.fontWeight}
                 onChange={(e) =>
@@ -333,23 +434,19 @@ export function FieldEditor({
                   })
                 }
               >
-                <option value="normal">Normal</option>
-                <option value="bold">Bold</option>
-                <option value="100">100</option>
-                <option value="200">200</option>
-                <option value="300">300</option>
-                <option value="400">400</option>
-                <option value="500">500</option>
-                <option value="600">600</option>
-                <option value="700">700</option>
-                <option value="800">800</option>
-                <option value="900">900</option>
+                <option value="normal">正常</option>
+                <option value="bold">粗體</option>
+                <option value="300">細</option>
+                <option value="500">中等</option>
+                <option value="600">半粗</option>
+                <option value="700">粗</option>
+                <option value="800">特粗</option>
               </select>
             </div>
 
             {/* Color */}
             <div className="field-settings-row">
-              <label>Color</label>
+              <label>顏色</label>
               <input
                 type="color"
                 value={selectedField.color}
@@ -369,7 +466,7 @@ export function FieldEditor({
 
             {/* Text Align */}
             <div className="field-settings-row">
-              <label>Align</label>
+              <label>對齊</label>
               <div className="field-settings-align">
                 <button
                   className={selectedField.textAlign === 'left' ? 'active' : ''}
@@ -377,7 +474,7 @@ export function FieldEditor({
                     handleFieldUpdate(selectedField.id, { textAlign: 'left' })
                   }
                 >
-                  Left
+                  左
                 </button>
                 <button
                   className={selectedField.textAlign === 'center' ? 'active' : ''}
@@ -385,7 +482,7 @@ export function FieldEditor({
                     handleFieldUpdate(selectedField.id, { textAlign: 'center' })
                   }
                 >
-                  Center
+                  中
                 </button>
                 <button
                   className={selectedField.textAlign === 'right' ? 'active' : ''}
@@ -393,35 +490,35 @@ export function FieldEditor({
                     handleFieldUpdate(selectedField.id, { textAlign: 'right' })
                   }
                 >
-                  Right
+                  右
                 </button>
               </div>
             </div>
           </div>
         ) : (
           <div className="field-settings-empty">
-            Select a field to edit its settings
+            選擇欄位以編輯設定
           </div>
         )}
 
         {/* Keyboard Shortcuts */}
         <div className="field-editor-shortcuts">
-          <div className="field-editor-shortcuts-title">Keyboard Shortcuts</div>
+          <div className="field-editor-shortcuts-title">快捷鍵</div>
           <div className="field-editor-shortcuts-list">
             <span className="field-editor-shortcut-item">
-              <kbd>Arrow</kbd> Move 1px
+              <kbd>方向鍵</kbd> 移動 1px
             </span>
             <span className="field-editor-shortcut-item">
-              <kbd>Shift+Arrow</kbd> Move 10px
+              <kbd>Shift+方向</kbd> 移動 10px
             </span>
             <span className="field-editor-shortcut-item">
-              <kbd>Delete</kbd> Remove
+              <kbd>Delete</kbd> 刪除
             </span>
             <span className="field-editor-shortcut-item">
-              <kbd>Ctrl+D</kbd> Duplicate
+              <kbd>Ctrl+D</kbd> 複製
             </span>
             <span className="field-editor-shortcut-item">
-              <kbd>Esc</kbd> Deselect
+              <kbd>Esc</kbd> 取消選取
             </span>
           </div>
         </div>

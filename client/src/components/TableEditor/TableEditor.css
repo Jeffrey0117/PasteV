@@ -10,6 +10,7 @@
   flex-direction: column;
   height: 100%;
   box-shadow: var(--shadow-sm);
+  margin: 0 1.5rem;
 }
 
 /* ==================== */
