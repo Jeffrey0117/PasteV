@@ -133,16 +133,29 @@
 /* ==================== */
 .field-item {
   position: absolute;
-  border: 2px dashed rgba(99, 102, 241, 0.5);
+  border: 3px dashed rgba(99, 102, 241, 0.6);
   border-radius: 4px;
   padding: 8px 12px;
   cursor: move;
   user-select: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   min-width: 80px;
-  min-height: 32px;
+  min-height: 40px;
   overflow: visible;
   z-index: 1;
+  /* Expand clickable area with pseudo-element */
+  box-sizing: border-box;
+}
+
+/* Expand click area for easier dragging */
+.field-item::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  z-index: -1;
 }
 
 .field-item:hover {
@@ -151,8 +164,9 @@
 
 .field-item.selected {
   border-style: solid;
+  border-width: 3px;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-light);
+  box-shadow: 0 0 0 4px var(--primary-light);
   z-index: 10;
 }
 
@@ -198,53 +212,38 @@
   border-radius: 50%;
   z-index: 10;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s, background 0.15s;
+  transition: background 0.15s;
 }
 
 .field-resize-handle:hover {
   background: var(--primary-hover);
-  transform: scale(1.2);
 }
 
 /* Left handle - for width adjustment from left */
 .field-resize-left {
-  width: 10px;
-  height: 10px;
-  left: -6px;
+  width: 16px;
+  height: 16px;
+  left: -9px;
   top: 50%;
-  transform: translateY(-50%);
   cursor: ew-resize;
-}
-
-.field-resize-left:hover {
-  transform: translateY(-50%) scale(1.2);
 }
 
 /* Right handle - for width adjustment from right */
 .field-resize-right {
-  width: 10px;
-  height: 10px;
-  right: -6px;
+  width: 16px;
+  height: 16px;
+  right: -9px;
   top: 50%;
-  transform: translateY(-50%);
   cursor: ew-resize;
-}
-
-.field-resize-right:hover {
-  transform: translateY(-50%) scale(1.2);
 }
 
 /* Corner handle - for font size adjustment */
 .field-resize-corner {
-  width: 12px;
-  height: 12px;
-  right: -7px;
-  bottom: -7px;
+  width: 18px;
+  height: 18px;
+  right: -10px;
+  bottom: -10px;
   cursor: nwse-resize;
-}
-
-.field-resize-corner:hover {
-  transform: scale(1.2);
 }
 
 /* Show cursor feedback when resizing */

@@ -221,23 +221,27 @@ export function FieldItem({
       </div>
 
       {/* Resize handles - only show when selected */}
+      {/* Scale handles inversely to zoom so they stay the same size on screen */}
       {isSelected && (
         <>
           {/* Left handle - adjust width from left side */}
           <div
             className="field-resize-handle field-resize-left"
+            style={{ transform: `translateY(-50%) scale(${1 / zoom})` }}
             onMouseDown={handleResizeLeftMouseDown}
             title="拖曳調整寬度 (左)"
           />
           {/* Right handle - adjust width from right side */}
           <div
             className="field-resize-handle field-resize-right"
+            style={{ transform: `translateY(-50%) scale(${1 / zoom})` }}
             onMouseDown={handleResizeRightMouseDown}
             title="拖曳調整寬度 (右)"
           />
           {/* Corner handle - adjust font size */}
           <div
             className="field-resize-handle field-resize-corner"
+            style={{ transform: `scale(${1 / zoom})` }}
             onMouseDown={handleResizeCornerMouseDown}
             title="拖曳調整字體大小"
           />
