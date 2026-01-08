@@ -1,12 +1,13 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { SlideContent, ImageSearchResult, EmbeddedImage } from './types';
+import { LayersPanel } from './panels';
 
 interface ConfirmStepProps {
   slides: SlideContent[];
   includeImages: boolean;
   onUpdateSlide: (slideId: string, updates: Partial<SlideContent>) => void;
   onDeleteSlide: (slideId: string) => void;
-  onAddSlide: () => void;
+  onAddSlide: (slide?: Partial<SlideContent>) => SlideContent;
   onReorderSlides: (fromIndex: number, toIndex: number) => void;
   onRegenerateSlide: (slideId: string) => void;
   onSearchImage: (slideId: string, query: string) => Promise<ImageSearchResult[]>;
@@ -25,6 +26,7 @@ function imageToBase64(file: File): Promise<string> {
 /**
  * Step 2: 確認內容
  * 編輯、調整、上傳素材圖片
+ * 使用 LayersPanel 管理圖層
  */
 export function ConfirmStep({
   slides,
@@ -47,6 +49,13 @@ export function ConfirmStep({
 
   const selectedSlide = slides.find((s) => s.id === selectedSlideId);
   const selectedIndex = slides.findIndex((s) => s.id === selectedSlideId);
+
+  // 當 slides 變更時，確保 selectedSlideId 有效
+  useEffect(() => {
+    if (slides.length > 0 && !slides.find(s => s.id === selectedSlideId)) {
+      setSelectedSlideId(slides[0].id);
+    }
+  }, [slides, selectedSlideId]);
 
   // 上傳素材圖片（支援多張）
   const handleImageUpload = useCallback(
@@ -97,6 +106,48 @@ export function ConfirmStep({
     [selectedSlideId, selectedSlide, onUpdateSlide]
   );
 
+  // 複製 slide
+  const handleDuplicateSlide = useCallback(
+    (slideId: string) => {
+      const slideToDuplicate = slides.find((s) => s.id === slideId);
+      if (!slideToDuplicate) return;
+
+      const newSlide = onAddSlide({
+        title: `${slideToDuplicate.title} (複製)`,
+        subtitle: slideToDuplicate.subtitle,
+        body: slideToDuplicate.body,
+        bulletPoints: [...(slideToDuplicate.bulletPoints || [])],
+        images: slideToDuplicate.images
+          ? slideToDuplicate.images.map((img) => ({
+              ...img,
+              id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            }))
+          : undefined,
+      });
+
+      setSelectedSlideId(newSlide.id);
+    },
+    [slides, onAddSlide]
+  );
+
+  // 刪除並選擇下一張
+  const handleDeleteSlide = useCallback(
+    (slideId: string) => {
+      const index = slides.findIndex((s) => s.id === slideId);
+      onDeleteSlide(slideId);
+
+      // 選擇下一張或上一張
+      if (slides.length > 1) {
+        const nextIndex = index >= slides.length - 1 ? index - 1 : index;
+        const nextSlide = slides.filter((s) => s.id !== slideId)[nextIndex];
+        if (nextSlide) {
+          setSelectedSlideId(nextSlide.id);
+        }
+      }
+    },
+    [slides, onDeleteSlide]
+  );
+
   // 移動 slide
   const handleMoveUp = useCallback(() => {
     if (selectedIndex > 0) {
@@ -110,52 +161,29 @@ export function ConfirmStep({
     }
   }, [selectedIndex, slides.length, onReorderSlides]);
 
+  // 新增空白 slide
+  const handleAddSlide = useCallback(() => {
+    const newSlide = onAddSlide();
+    setSelectedSlideId(newSlide.id);
+  }, [onAddSlide]);
+
   return (
     <div className="confirm-step">
-      {/* 左側：卡片列表 */}
-      <div className="slides-list">
-        <div className="slides-header">
-          <h3>卡片列表 ({slides.length})</h3>
-          <button className="btn-add-slide" onClick={onAddSlide}>
-            + 新增
+      {/* 左側：圖層面板 */}
+      <div className="confirm-sidebar">
+        <div className="sidebar-header">
+          <button className="btn-add-slide" onClick={handleAddSlide}>
+            + 新增卡片
           </button>
         </div>
-        <div className="slides-scroll">
-          {slides.map((slide, index) => (
-            <div
-              key={slide.id}
-              className={`slide-item ${selectedSlideId === slide.id ? 'selected' : ''}`}
-              onClick={() => setSelectedSlideId(slide.id)}
-            >
-              <div className="slide-index">{index + 1}</div>
-              <div className="slide-preview">
-                {slide.images && slide.images.length > 0 ? (
-                  <img
-                    src={slide.images[0].thumbnailUrl}
-                    alt=""
-                    className="slide-thumb"
-                  />
-                ) : (
-                  <div className="slide-thumb-placeholder">
-                    {slide.title.charAt(0) || '?'}
-                  </div>
-                )}
-                <div className="slide-info">
-                  <span className="slide-title">{slide.title || '(無標題)'}</span>
-                  <span className="slide-body-preview">
-                    {slide.body?.slice(0, 40) || '(無內容)'}
-                    {slide.body?.length > 40 ? '...' : ''}
-                  </span>
-                  {slide.images && slide.images.length > 0 && (
-                    <span className="slide-image-count">
-                      📷 {slide.images.length}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <LayersPanel
+          slides={slides}
+          selectedSlideId={selectedSlideId}
+          onSelect={setSelectedSlideId}
+          onReorder={onReorderSlides}
+          onDelete={handleDeleteSlide}
+          onDuplicate={handleDuplicateSlide}
+        />
       </div>
 
       {/* 右側：編輯區 */}
@@ -182,11 +210,15 @@ export function ConfirmStep({
                   ↓
                 </button>
                 <button
+                  className="btn-icon"
+                  onClick={() => handleDuplicateSlide(selectedSlide.id)}
+                  title="複製"
+                >
+                  ⧉
+                </button>
+                <button
                   className="btn-icon btn-danger"
-                  onClick={() => {
-                    onDeleteSlide(selectedSlide.id);
-                    setSelectedSlideId(slides[0]?.id || null);
-                  }}
+                  onClick={() => handleDeleteSlide(selectedSlide.id)}
                   disabled={slides.length <= 1}
                   title="刪除"
                 >
