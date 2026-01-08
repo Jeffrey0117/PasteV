@@ -1,13 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { InputStep } from './InputStep';
 import { ConfirmStep } from './ConfirmStep';
 import { PreviewStep } from './PreviewStep';
-import type {
-  AIGenStep,
-  AIGenerationInput,
-  SlideContent,
-  GeneratedContent,
-} from './types';
+import { useEditorState, useAutoSave } from './editor';
+import type { AIGenStep, GeneratedContent } from './types';
 import './AIGenModePage.css';
 
 interface AIGenModePageProps {
@@ -16,31 +12,47 @@ interface AIGenModePageProps {
 
 /**
  * AI Generation Mode 主頁面
+ * 使用 EditorState 統一狀態管理
  * 流程：輸入 -> 確認 -> 生成 -> 預覽
  */
 export function AIGenModePage({ onBack }: AIGenModePageProps) {
+  // EditorState Hook
+  const {
+    slides,
+    input,
+    canUndo,
+    canRedo,
+    updateSlide,
+    deleteSlide,
+    addSlide,
+    reorderSlides,
+    setInput,
+    undo,
+    redo,
+    reset,
+    loadFromGeneratedContent,
+    editorState,
+  } = useEditorState();
+
+  // 草稿自動儲存
+  const { lastSaved, loadDraft, clearDraft, hasDraft } = useAutoSave(editorState);
+
   // 步驟管理
   const [currentStep, setCurrentStep] = useState<AIGenStep>('input');
-
-  // 輸入資料
-  const [input, setInput] = useState<AIGenerationInput>({
-    mode: 'topic',
-    topic: '',
-    rawContent: '',
-    slideCount: 5,
-    style: 'informative',
-    language: 'zh-TW',
-    includeImages: true,
-  });
-
-  // 生成的內容
-  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
-  const [slides, setSlides] = useState<SlideContent[]>([]);
 
   // 載入狀態
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateProgress, setGenerateProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  // 檢查是否有草稿可載入
+  const [showDraftPrompt, setShowDraftPrompt] = useState(false);
+
+  useEffect(() => {
+    if (hasDraft()) {
+      setShowDraftPrompt(true);
+    }
+  }, [hasDraft]);
 
   // 步驟設定
   const steps: AIGenStep[] = ['input', 'confirm', 'generate', 'preview'];
@@ -51,6 +63,21 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
     preview: '預覽',
   };
   const currentStepIndex = steps.indexOf(currentStep);
+
+  // 載入草稿
+  const handleLoadDraft = useCallback(() => {
+    const data = loadDraft();
+    if (data && data.slides.length > 0) {
+      setCurrentStep('confirm');
+    }
+    setShowDraftPrompt(false);
+  }, [loadDraft]);
+
+  // 忽略草稿
+  const handleIgnoreDraft = useCallback(() => {
+    clearDraft();
+    setShowDraftPrompt(false);
+  }, [clearDraft]);
 
   // 生成內容
   const handleGenerate = useCallback(async () => {
@@ -80,8 +107,7 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
       }
 
       const data: GeneratedContent = await response.json();
-      setGeneratedContent(data);
-      setSlides(data.slides);
+      loadFromGeneratedContent(data);
       setGenerateProgress(100);
 
       // 進入確認步驟
@@ -93,7 +119,7 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
       setIsGenerating(false);
       setGenerateProgress(0);
     }
-  }, [input]);
+  }, [input, loadFromGeneratedContent]);
 
   // 搜尋圖片
   const handleSearchImage = useCallback(async (_slideId: string, query: string) => {
@@ -110,39 +136,6 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
     }
   }, []);
 
-  // 更新 slide
-  const handleUpdateSlide = useCallback((slideId: string, updates: Partial<SlideContent>) => {
-    setSlides(prev => prev.map(s =>
-      s.id === slideId ? { ...s, ...updates } : s
-    ));
-  }, []);
-
-  // 刪除 slide
-  const handleDeleteSlide = useCallback((slideId: string) => {
-    setSlides(prev => prev.filter(s => s.id !== slideId));
-  }, []);
-
-  // 新增 slide
-  const handleAddSlide = useCallback(() => {
-    const newSlide: SlideContent = {
-      id: `slide-${Date.now()}`,
-      title: '新卡片',
-      body: '',
-      bulletPoints: [],
-    };
-    setSlides(prev => [...prev, newSlide]);
-  }, []);
-
-  // 重新排序
-  const handleReorderSlides = useCallback((fromIndex: number, toIndex: number) => {
-    setSlides(prev => {
-      const result = [...prev];
-      const [removed] = result.splice(fromIndex, 1);
-      result.splice(toIndex, 0, removed);
-      return result;
-    });
-  }, []);
-
   // 重新生成單張
   const handleRegenerateSlide = useCallback(async (slideId: string) => {
     // TODO: 實作單張重新生成
@@ -151,20 +144,11 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
 
   // 清除並返回
   const handleClear = useCallback(() => {
-    setInput({
-      mode: 'topic',
-      topic: '',
-      rawContent: '',
-      slideCount: 5,
-      style: 'informative',
-      language: 'zh-TW',
-      includeImages: true,
-    });
-    setGeneratedContent(null);
-    setSlides([]);
+    reset();
+    clearDraft();
     setCurrentStep('input');
     setError(null);
-  }, []);
+  }, [reset, clearDraft]);
 
   // 下一步
   const handleNext = useCallback(() => {
@@ -206,8 +190,47 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
     }
   }, [currentStep, input, slides]);
 
+  // 鍵盤快捷鍵
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Z = Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      // Ctrl/Cmd + Shift + Z = Redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        redo();
+      }
+      // Ctrl/Cmd + Y = Redo (Windows style)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
   return (
     <div className="ai-gen-page">
+      {/* 草稿提示 */}
+      {showDraftPrompt && (
+        <div className="draft-prompt">
+          <div className="draft-prompt-content">
+            <span>發現未儲存的草稿，是否載入？</span>
+            <div className="draft-prompt-actions">
+              <button onClick={handleLoadDraft}>載入草稿</button>
+              <button onClick={handleIgnoreDraft} className="secondary">
+                重新開始
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="ai-gen-header">
         <div className="ai-gen-header-left">
@@ -222,7 +245,34 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
           </div>
         </div>
         <div className="ai-gen-header-right">
-          {(generatedContent || slides.length > 0) && (
+          {/* Undo/Redo 按鈕 */}
+          {currentStep === 'confirm' && (
+            <div className="undo-redo-buttons">
+              <button
+                className="btn-icon"
+                onClick={undo}
+                disabled={!canUndo}
+                title="復原 (Ctrl+Z)"
+              >
+                ↶
+              </button>
+              <button
+                className="btn-icon"
+                onClick={redo}
+                disabled={!canRedo}
+                title="重做 (Ctrl+Shift+Z)"
+              >
+                ↷
+              </button>
+            </div>
+          )}
+          {/* 自動儲存狀態 */}
+          {lastSaved && currentStep === 'confirm' && (
+            <span className="auto-save-status">
+              已儲存 {lastSaved.toLocaleTimeString()}
+            </span>
+          )}
+          {slides.length > 0 && (
             <button className="btn-clear" onClick={handleClear}>
               重新開始
             </button>
@@ -269,10 +319,10 @@ export function AIGenModePage({ onBack }: AIGenModePageProps) {
           <ConfirmStep
             slides={slides}
             includeImages={input.includeImages}
-            onUpdateSlide={handleUpdateSlide}
-            onDeleteSlide={handleDeleteSlide}
-            onAddSlide={handleAddSlide}
-            onReorderSlides={handleReorderSlides}
+            onUpdateSlide={updateSlide}
+            onDeleteSlide={deleteSlide}
+            onAddSlide={addSlide}
+            onReorderSlides={reorderSlides}
             onRegenerateSlide={handleRegenerateSlide}
             onSearchImage={handleSearchImage}
           />

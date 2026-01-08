@@ -97,6 +97,120 @@
   color: white;
 }
 
+/* Header Right */
+.ai-gen-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Undo/Redo 按鈕 */
+.undo-redo-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.undo-redo-buttons .btn-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.undo-redo-buttons .btn-icon:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.undo-redo-buttons .btn-icon:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* 自動儲存狀態 */
+.auto-save-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+}
+
+/* 草稿提示 */
+.draft-prompt {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.draft-prompt-content {
+  background: var(--surface);
+  padding: 1.5rem 2rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.draft-prompt-content span {
+  display: block;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.draft-prompt-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.draft-prompt-actions button {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.draft-prompt-actions button:first-child {
+  color: white;
+  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  border: none;
+}
+
+.draft-prompt-actions button:first-child:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.draft-prompt-actions button.secondary {
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
+.draft-prompt-actions button.secondary:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
 /* Step Indicator */
 .ai-gen-steps {
   display: flex;
@@ -1040,18 +1154,65 @@
   color: var(--text-muted);
 }
 
+/* Zoom 控制列 */
+.preview-zoom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+}
+
+.preview-zoom-controls button {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preview-zoom-controls button:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.preview-zoom-controls .zoom-level {
+  min-width: 50px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .preview-main {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  justify-content: center;
   min-height: 0;
+  overflow: hidden;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  user-select: none;
+}
+
+.preview-main.panning {
+  cursor: grabbing;
 }
 
 .preview-card {
-  width: 100%;
-  max-width: 500px;
   padding: 2rem;
   border-radius: var(--radius);
   background-size: cover;
@@ -1060,6 +1221,8 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  transition: transform 0.1s ease-out;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .preview-title {

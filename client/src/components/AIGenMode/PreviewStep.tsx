@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { SlideContent } from './types';
 
 interface PreviewStepProps {
@@ -10,15 +10,86 @@ interface PreviewStepProps {
   };
 }
 
+/** Zoom 限制範圍 (參考 mini-canvas-editor: 0.01 ~ 20) */
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.1;
+
 /**
  * Step 4: 預覽輸出
- * 顯示所有卡片，支援下載
+ * 顯示所有卡片，支援縮放、平移、下載
  */
 export function PreviewStep({ slides, canvasSettings }: PreviewStepProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Zoom/Pan 狀態
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  const containerRef = useRef<HTMLDivElement>(null);
   const currentSlide = slides[currentIndex];
+
+  // 重置 zoom/pan 當切換 slide
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, [currentIndex]);
+
+  // 滾輪縮放 (參考 mini-canvas-editor workspace.ts)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    setZoom((prev) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev + delta)));
+  }, []);
+
+  // 開始拖曳平移
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return; // 只處理左鍵
+    setIsPanning(true);
+    setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  }, [pan]);
+
+  // 拖曳中
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    setPan({
+      x: e.clientX - panStart.x,
+      y: e.clientY - panStart.y,
+    });
+  }, [isPanning, panStart]);
+
+  // 結束拖曳
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Zoom 控制按鈕
+  const handleZoomIn = useCallback(() => {
+    setZoom((prev) => Math.min(MAX_ZOOM, prev + ZOOM_STEP * 2));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom((prev) => Math.max(MIN_ZOOM, prev - ZOOM_STEP * 2));
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  const handleZoomFit = useCallback(() => {
+    if (!containerRef.current) return;
+    const containerWidth = containerRef.current.clientWidth - 48; // padding
+    const containerHeight = containerRef.current.clientHeight - 100;
+    const scaleX = containerWidth / canvasSettings.width;
+    const scaleY = containerHeight / canvasSettings.height;
+    const fitZoom = Math.min(scaleX, scaleY, 1);
+    setZoom(fitZoom);
+    setPan({ x: 0, y: 0 });
+  }, [canvasSettings]);
 
   // 渲染單張卡片到 Canvas
   const renderSlideToCanvas = useCallback(
@@ -228,6 +299,8 @@ export function PreviewStep({ slides, canvasSettings }: PreviewStepProps) {
             <div className="thumbnail-index">{index + 1}</div>
             {slide.suggestedImage ? (
               <img src={slide.suggestedImage.thumbnailUrl} alt="" />
+            ) : slide.images && slide.images.length > 0 ? (
+              <img src={slide.images[0].thumbnailUrl} alt="" />
             ) : (
               <div className="thumbnail-placeholder">
                 {slide.title.charAt(0) || '?'}
@@ -237,13 +310,33 @@ export function PreviewStep({ slides, canvasSettings }: PreviewStepProps) {
         ))}
       </div>
 
-      {/* 預覽區 */}
-      <div className="preview-main">
+      {/* Zoom 控制列 */}
+      <div className="preview-zoom-controls">
+        <button onClick={handleZoomOut} title="縮小">−</button>
+        <span className="zoom-level">{Math.round(zoom * 100)}%</span>
+        <button onClick={handleZoomIn} title="放大">+</button>
+        <button onClick={handleZoomReset} title="重置">1:1</button>
+        <button onClick={handleZoomFit} title="適應視窗">適應</button>
+      </div>
+
+      {/* 預覽區 (可縮放平移) */}
+      <div
+        ref={containerRef}
+        className={`preview-main ${isPanning ? 'panning' : ''}`}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
         {currentSlide && (
           <div
             className="preview-card"
             style={{
-              aspectRatio: `${canvasSettings.width} / ${canvasSettings.height}`,
+              width: canvasSettings.width,
+              height: canvasSettings.height,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: 'center center',
               backgroundImage: currentSlide.suggestedImage
                 ? `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${currentSlide.suggestedImage.url})`
                 : undefined,
@@ -284,24 +377,25 @@ export function PreviewStep({ slides, canvasSettings }: PreviewStepProps) {
             )}
           </div>
         )}
+      </div>
 
-        <div className="preview-nav">
-          <button
-            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-            disabled={currentIndex === 0}
-          >
-            ← 上一張
-          </button>
-          <span>
-            {currentIndex + 1} / {slides.length}
-          </span>
-          <button
-            onClick={() => setCurrentIndex((i) => Math.min(slides.length - 1, i + 1))}
-            disabled={currentIndex === slides.length - 1}
-          >
-            下一張 →
-          </button>
-        </div>
+      {/* 導航 */}
+      <div className="preview-nav">
+        <button
+          onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+          disabled={currentIndex === 0}
+        >
+          ← 上一張
+        </button>
+        <span>
+          {currentIndex + 1} / {slides.length}
+        </span>
+        <button
+          onClick={() => setCurrentIndex((i) => Math.min(slides.length - 1, i + 1))}
+          disabled={currentIndex === slides.length - 1}
+        >
+          下一張 →
+        </button>
       </div>
 
       {/* 下載按鈕 */}
