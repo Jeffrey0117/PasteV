@@ -21,7 +21,7 @@ export interface PreviewProps {
 }
 
 // Helper to generate unique ID
-const generateId = () => Math.random().toString(36).substring(2, 9);
+const generateId = () => Math.random().toString(36).slice(2, 11);
 
 /**
  * Preview component with editing capabilities

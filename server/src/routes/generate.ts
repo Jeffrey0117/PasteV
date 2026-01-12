@@ -3,6 +3,17 @@ import sharp from 'sharp';
 
 const router = Router();
 
+// Maximum allowed image size (10MB)
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+// Validate Base64 string
+function isValidBase64(str: string): boolean {
+  if (!str || typeof str !== 'string') return false;
+  // Check if it's a valid base64 pattern
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+  return base64Regex.test(str);
+}
+
 interface TextBlock {
   text: string;
   x: number;
@@ -65,7 +76,27 @@ router.post('/', async (req, res) => {
     if (backgroundImage) {
       // Decode base64 background image
       const bgBase64 = backgroundImage.replace(/^data:image\/\w+;base64,/, '');
+
+      // Validate base64 format and size
+      if (!isValidBase64(bgBase64)) {
+        return res.status(400).json({ error: 'Invalid base64 image format' });
+      }
+
       const bgBuffer = Buffer.from(bgBase64, 'base64');
+
+      // Check image size
+      if (bgBuffer.length > MAX_IMAGE_SIZE) {
+        return res.status(400).json({
+          error: `Image too large. Maximum size is ${MAX_IMAGE_SIZE / 1024 / 1024}MB`
+        });
+      }
+
+      // Verify it's a valid image
+      try {
+        await sharp(bgBuffer).metadata();
+      } catch {
+        return res.status(400).json({ error: 'Invalid image data' });
+      }
 
       // Composite SVG text over background
       outputBuffer = await sharp(bgBuffer)

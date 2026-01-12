@@ -3,8 +3,34 @@ import multer from 'multer';
 import Tesseract from 'tesseract.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync, mkdirSync } from 'fs';
 import sharp from 'sharp';
+
+// Tesseract.js result types
+interface TesseractWord {
+  text: string;
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+  confidence: number;
+}
+
+interface TesseractResult {
+  data: {
+    text: string;
+    words?: TesseractWord[];
+  };
+}
+
+// OCR timeout in milliseconds (2 minutes)
+const OCR_TIMEOUT = 120000;
+
+// Helper function to add timeout to promises
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(errorMessage)), ms);
+  });
+  return Promise.race([promise, timeout]);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,8 +41,8 @@ const router = Router();
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(__dirname, '../../uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    if (!existsSync(uploadDir)) {
+      mkdirSync(uploadDir, { recursive: true });
     }
     cb(null, uploadDir);
   },
@@ -99,17 +125,26 @@ router.post('/', upload.single('image'), async (req, res) => {
     const imagePath = req.file.path;
     console.log(`Processing OCR for: ${imagePath}`);
 
-    // Read file into buffer for both OCR and color extraction
-    const imageBuffer = fs.readFileSync(imagePath);
+    // Read file into buffer for both OCR and color extraction (async)
+    const imageBuffer = await fs.readFile(imagePath);
 
-    // Perform OCR with Tesseract.js
-    const result = await Tesseract.recognize(imageBuffer, 'eng+chi_tra', {
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+    // Get image dimensions using sharp
+    const imageMetadata = await sharp(imageBuffer).metadata();
+    const imageWidth = imageMetadata.width || 0;
+    const imageHeight = imageMetadata.height || 0;
+
+    // Perform OCR with Tesseract.js (with timeout)
+    const result = await withTimeout(
+      Tesseract.recognize(imageBuffer, 'eng+chi_tra', {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+          }
         }
-      }
-    });
+      }),
+      OCR_TIMEOUT,
+      'OCR processing timed out. Please try with a smaller image.'
+    );
 
     // Extract text blocks with positions (without colors first)
     const rawBlocks: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }> = [];
@@ -138,15 +173,15 @@ router.post('/', upload.single('image'), async (req, res) => {
       color: colors[i] || '#000000'
     }));
 
-    // Clean up uploaded file
-    fs.unlinkSync(imagePath);
+    // Clean up uploaded file (async)
+    await fs.unlink(imagePath);
 
     res.json({
       success: true,
       fullText: result.data.text,
       textBlocks,
-      imageWidth: (result.data as any).width || 0,
-      imageHeight: (result.data as any).height || 0
+      imageWidth,
+      imageHeight
     });
 
   } catch (error) {
@@ -168,13 +203,23 @@ router.post('/base64', async (req, res) => {
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
-    const result = await Tesseract.recognize(buffer, 'eng+chi_tra', {
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+    // Get image dimensions using sharp
+    const imageMetadata = await sharp(buffer).metadata();
+    const imageWidth = imageMetadata.width || 0;
+    const imageHeight = imageMetadata.height || 0;
+
+    // Perform OCR with Tesseract.js (with timeout)
+    const result = await withTimeout(
+      Tesseract.recognize(buffer, 'eng+chi_tra', {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+          }
         }
-      }
-    });
+      }),
+      OCR_TIMEOUT,
+      'OCR processing timed out. Please try with a smaller image.'
+    );
 
     // Extract text blocks with positions (without colors first)
     const rawBlocks: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }> = [];
@@ -207,8 +252,8 @@ router.post('/base64', async (req, res) => {
       success: true,
       fullText: result.data.text,
       textBlocks,
-      imageWidth: (result.data as any).width || 0,
-      imageHeight: (result.data as any).height || 0
+      imageWidth,
+      imageHeight
     });
 
   } catch (error) {

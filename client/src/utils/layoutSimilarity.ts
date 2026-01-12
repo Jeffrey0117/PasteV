@@ -145,7 +145,7 @@ export function groupImagesByLayout(
     // 沒有找到匹配群組，建立新群組
     if (!foundGroup) {
       groups.push({
-        id: `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         representativeImageId: image.id,
         imageIds: [image.id],
         similarity: 1.0, // 單張圖片，相似度為 1

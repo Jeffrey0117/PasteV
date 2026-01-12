@@ -30,7 +30,7 @@ interface DetectBlocksError {
 
 // Generate unique ID
 function generateBlockId(): string {
-  return `block-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  return `block-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 // Estimate font size from bounding box height

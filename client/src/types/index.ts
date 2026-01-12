@@ -390,7 +390,7 @@ export interface TranslateResponse {
 
 /** 產生唯一 ID */
 export function generateId(prefix: string = 'id'): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 /** 建立預設欄位模板 */

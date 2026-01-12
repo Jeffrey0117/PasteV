@@ -89,10 +89,19 @@ function App() {
     }
   }, []);
 
-  // Auto-save to localStorage
+  // Auto-save to localStorage with size check
   useEffect(() => {
     if (images.length > 0) {
       try {
+        // Create data object without large base64 images for metadata
+        const metadataImages = images.map(img => ({
+          ...img,
+          // Only store first 100 chars of originalImage as preview indicator
+          originalImage: img.originalImage.length > 100
+            ? img.originalImage.substring(0, 100) + '...[truncated]'
+            : img.originalImage,
+        }));
+
         const data = {
           images,
           fieldTemplates,
@@ -101,9 +110,39 @@ function App() {
           canvasSettings,
           savedAt: Date.now(),
         };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+        const dataString = JSON.stringify(data);
+
+        // Check if data size exceeds localStorage limit (~5MB safe limit)
+        const dataSizeKB = new Blob([dataString]).size / 1024;
+        if (dataSizeKB > 4500) {
+          console.warn(`Session data too large (${Math.round(dataSizeKB)}KB). Saving metadata only.`);
+          // Save only metadata without base64 images
+          const metadataData = {
+            images: metadataImages,
+            fieldTemplates,
+            currentStep,
+            currentImageIndex,
+            canvasSettings,
+            savedAt: Date.now(),
+            _truncated: true,
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(metadataData));
+        } else {
+          localStorage.setItem(STORAGE_KEY, dataString);
+        }
       } catch (e) {
         console.error('Failed to save session:', e);
+        // If quota exceeded, try to save just the field templates
+        try {
+          localStorage.setItem(STORAGE_KEY + '_backup', JSON.stringify({
+            fieldTemplates,
+            canvasSettings,
+            savedAt: Date.now(),
+          }));
+        } catch {
+          // Ignore if even backup fails
+        }
       }
     }
   }, [images, fieldTemplates, currentStep, currentImageIndex, canvasSettings]);
